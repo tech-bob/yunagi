@@ -1,0 +1,44 @@
+/* libadwaita dialogs styled like the Quickshell panels; colors from matugen (colors.css) */
+@import url("colors.css");
+
+dialog.alert sheet, dialog.alert .dialog-contents, window.messagedialog {
+    background: linear-gradient(alpha(@surface, 0.96), alpha(@surface_container_high, 0.96));
+    color: @text;
+    border: 1px solid @outline_variant;
+    border-radius: 16px;
+    min-width: 440px;
+}
+
+dialog.alert .message-area {
+    padding: 28px 28px 20px 28px;
+}
+
+dialog.alert .response-area {
+    padding: 0 28px 28px 28px;
+    border-spacing: 10px;
+}
+
+dialog.alert .response-area button {
+    border-radius: 12px;
+    padding: 10px 20px;
+    color: @text;
+    background: alpha(@surface_container_highest, 0.7);
+    border: 1px solid @outline_variant;
+    box-shadow: none;
+    transition: background 150ms;
+}
+
+dialog.alert .response-area button:hover {
+    background: @surface_container_highest;
+}
+
+dialog.alert .response-area button.suggested-action,
+dialog.alert .response-area button:focus-visible {
+    background: @secondary_container;
+    border-color: @primary;
+}
+
+dialog.alert .response-area button.destructive-action {
+    border-color: @error;
+    color: @error;
+}

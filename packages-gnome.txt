@@ -1,0 +1,33 @@
+# GNOME: the parts of the gnome group a lean desktop needs, plus a few extras
+
+# Shell and login
+gdm
+gnome-shell
+gnome-session
+gnome-settings-daemon
+gnome-control-center
+gnome-keyring
+gnome-color-manager
+xdg-desktop-portal-gnome
+xdg-user-dirs-gtk
+tecla
+
+# Files
+nautilus
+sushi
+gvfs
+gvfs-afc
+
+# Apps
+loupe
+papers
+gnome-text-editor
+gnome-calculator
+gnome-calendar
+gnome-clocks
+gnome-boxes
+gnome-tweaks
+
+# Extensions
+gnome-shell-extension-appindicator
+gnome-shell-extension-caffeine

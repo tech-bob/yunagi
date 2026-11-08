@@ -1,0 +1,9 @@
+# ISO build output
+iso/work/
+iso/out/
+
+# Rust build output
+yunagi-pkg/target/
+
+# Python bytecode
+__pycache__/

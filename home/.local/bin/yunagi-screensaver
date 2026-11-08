@@ -1,0 +1,706 @@
+#!/usr/bin/env python3
+# Yunagi screensaver: the Yunagi logo and marks come in, hold and go out, with a new
+# effect each round. Without arguments: opens a fullscreen kitty running the
+# effect. --run: the effect itself. YUNAGI_SS_LOG=<file> logs why it exits.
+# YUNAGI_SS_STYLE=marks shows only the six mark styles; a style name selects one.
+# YUNAGI_SS_STYLE=all previews marks then originals in sequence, =originals only the
+# five originals; Escape closes it.
+import colorsys, math, os, random, select, shutil, signal, subprocess, sys, termios, time, tty
+from functools import lru_cache
+from pathlib import Path
+import re
+import xml.etree.ElementTree as ET
+
+if "--run" not in sys.argv:
+    if os.environ.get("YUNAGI_SS_LOG"):
+        open(os.environ["YUNAGI_SS_LOG"], "a").write(f"{time.strftime('%T')} launcher\n")
+    if subprocess.run(["pgrep", "-f", "yunagi-screensave[r] --run"], capture_output=True).returncode == 0:
+        sys.exit(0)
+    # One fullscreen kitty per monitor: focus each monitor, open, wait for the window
+    import json
+    hy = lambda *a: subprocess.run(["hyprctl", *a], capture_output=True, text=True).stdout
+    count = lambda: hy("clients").count("class: yunagi-screensaver\n")
+    try:
+        mons = json.loads(hy("monitors", "-j"))
+    except ValueError:
+        mons = []
+    focused = next((m["name"] for m in mons if m.get("focused")), None)
+    for m in mons or [None]:
+        if m:
+            hy("dispatch", f"hl.dsp.focus({{monitor='{m['name']}'}})")
+        n = count()
+        subprocess.Popen(["kitty", "--class", "yunagi-screensaver",
+            "-o", "background=#08080a", "-o", "background_opacity=1",
+            "-o", "window_padding_width=0", "-o", "confirm_os_window_close=0",
+            "-o", "font_size=13", os.path.abspath(__file__), "--run"], start_new_session=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(40):
+            if count() > n:
+                break
+            time.sleep(0.05)
+    if focused:
+        hy("dispatch", f"hl.dsp.focus({{monitor='{focused}'}})")
+    sys.exit(0)
+
+LOGO = [
+    "██╗   ██╗██╗   ██╗███╗   ██╗ █████╗  ██████╗ ██╗",
+    "╚██╗ ██╔╝██║   ██║████╗  ██║██╔══██╗██╔════╝ ██║",
+    " ╚████╔╝ ██║   ██║██╔██╗ ██║███████║██║  ███╗██║",
+    "  ╚██╔╝  ██║   ██║██║╚██╗██║██╔══██║██║   ██║██║",
+    "   ██║   ╚██████╔╝██║ ╚████║██║  ██║╚██████╔╝██║",
+    "   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝ ╚═╝",
+]
+TAG = "techBob"
+
+BG = (8, 8, 10)
+FG = (244, 244, 242)
+WHITE = (255, 255, 255)
+ACCENT = (74, 222, 128)
+GLYPHS = "0123456789ABCDEFHKMNRTXZ=+*<>:;|¦ΣΞΨΩλπЖЯИ"
+FPS = 30
+
+
+def log(msg):
+    if os.environ.get("YUNAGI_SS_LOG"):
+        with open(os.environ["YUNAGI_SS_LOG"], "a") as f:
+            f.write(f"{time.strftime('%T')} {msg}\n")
+
+
+def clamp(v):
+    return max(0.0, min(1.0, v))
+
+
+def mix(a, b, t):
+    t = clamp(t)
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def hsv(h, s, v):
+    return tuple(int(c * 255) for c in colorsys.hsv_to_rgb(h % 1.0, s, v))
+
+
+def grad(stops, t):
+    t = clamp(t) * (len(stops) - 1)
+    i = min(int(t), len(stops) - 2)
+    return mix(stops[i], stops[i + 1], t - i)
+
+
+def ease(t):
+    t = clamp(t)
+    return 1 - (1 - t) ** 3
+
+
+# --- Logo ---------------------------------------------------------------------
+
+class Cell:
+    __slots__ = ("x", "y", "ch", "kind", "nx", "ny", "r", "sx", "sy", "pr", "pa")
+
+
+def build_logo(scale, W, H):
+    lw = max(len(r) for r in LOGO)
+    if scale == 2 and (W < 2 * lw + 4 or H < 2 * len(LOGO) + 6):
+        scale = 1
+    cells = {}
+    if scale == 1:
+        for y, row in enumerate(LOGO):
+            for x, ch in enumerate(row):
+                if ch != " ":
+                    cells[(x, y)] = (ch, "block" if ch == "█" else "shadow")
+        w, h = lw, len(LOGO)
+    else:
+        blocks = {(2 * x + dx, 2 * y + dy)
+                  for y, row in enumerate(LOGO) for x, ch in enumerate(row) if ch == "█"
+                  for dx in (0, 1) for dy in (0, 1)}
+        for (x, y) in blocks:
+            cells[(x, y)] = ("█", "block")
+            if (x + 1, y + 1) not in blocks:
+                cells.setdefault((x + 1, y + 1), ("█", "shadow"))
+        w, h = 2 * lw + 1, 2 * len(LOGO) + 1
+    tx = (w - len(TAG)) // 2
+    for i, ch in enumerate(TAG):
+        cells[(tx + i, h + 1)] = (ch, "tag1" if i < 4 else "tag2")
+    h += 2
+    ox, oy = (W - w) // 2, (H - h) // 2
+    out = []
+    for (x, y), (ch, kind) in cells.items():
+        c = Cell()
+        c.x, c.y, c.ch, c.kind = ox + x, oy + y, ch, kind
+        c.nx, c.ny = x / max(w - 1, 1), y / max(h - 1, 1)
+        c.r = random.random()
+        out.append(c)
+    return out, ox, oy, w, h
+
+
+# --- Colours per style --------------------------------------------------------
+
+def matrix_col(c, t):
+    return {"block": ACCENT, "shadow": (13, 122, 69), "tag1": FG, "tag2": ACCENT}[c.kind]
+
+def prism_col(c, t):
+    h = c.nx * 0.85 + c.ny * 0.15 - t * 0.3
+    return hsv(h, 0.75, 0.35) if c.kind == "shadow" else hsv(h, 0.7, 1.0)
+
+EMBER = [(255, 236, 140), (255, 160, 50), (240, 70, 60), (190, 40, 140)]
+
+def ember_col(c, t):
+    if c.kind == "shadow":
+        return (90, 20, 40)
+    return grad(EMBER, c.ny * 0.7 + 0.22 * (1 + math.sin(c.nx * 7 + c.ny * 3 + t * 4)))
+
+GLACIER = [(170, 250, 255), (60, 180, 250), (90, 90, 240), (170, 90, 240)]
+
+def glacier_col(c, t):
+    if c.kind == "shadow":
+        return (20, 40, 90)
+    return grad(GLACIER, (c.nx + c.ny) / 2)
+
+def mono_col(c, t):
+    if c.kind == "tag2":
+        return ACCENT
+    if c.kind == "shadow":
+        return (60, 60, 70)
+    return FG
+
+
+# --- Mark colours -------------------------------------------------------------
+
+def mark_tint(c, color):
+    if isinstance(c.kind, tuple):
+        return mix(BG, color, c.kind[0] ** 0.85)
+    return FG if c.kind == "tag1" else color
+
+
+def spectrum_col(c, t):
+    along = c.kind[1] if isinstance(c.kind, tuple) else c.nx
+    return mark_tint(c, hsv(c.nx * 0.45 + c.ny * 0.4 + along * 0.35 - t * 0.1, 0.75, 1))
+
+
+def aurora_col(c, t):
+    stops = [(85, 255, 170), (60, 225, 255), (100, 125, 255), (235, 95, 245)]
+    return mark_tint(c, grad(stops, 0.5 + 0.5 * math.sin(c.ny * 3 + c.nx * 2 - t * 0.65)))
+
+
+def plasma_col(c, t):
+    stops = [(255, 90, 155), (255, 175, 75), (255, 235, 150), (155, 100, 255), (65, 220, 255)]
+    return mark_tint(c, grad(stops, 0.5 + 0.5 * math.sin(c.nx * 3 - c.ny * 2 - t * 0.7)))
+
+
+def vortex_col(c, t):
+    # Rainbow that flows inward along the spiral
+    along = c.kind[1] if isinstance(c.kind, tuple) else c.nx
+    return mark_tint(c, hsv(along * 1.6 - t * 0.35, 0.8, 1))
+
+
+# --- Mark geometry ------------------------------------------------------------
+
+MARK_FILES = {
+    "prisma": "prisma-mark/mockup.svg",
+    "kristall": "mark/kristall/k2-wide-brilliant.svg",
+    "diamant": "neon/diamant.svg",
+    "labyrint": "neon/labyrint.svg",
+    "spiral": "spiral-mark/spiral-path.svg",
+    "oktaeder": "wire/oktaeder.svg",
+    "briljant": "wire/briljant.svg",
+}
+
+
+@lru_cache(maxsize=8)
+def mark_geometry(name):
+    roots = [Path(__file__).resolve().parents[3] / "branding", Path.home() / ".local/share/yunagi/branding"]
+    path = next((root / MARK_FILES[name] for root in roots if (root / MARK_FILES[name]).is_file()), None)
+    if path is None:
+        raise FileNotFoundError(f"Missing screensaver mark: {name}")
+    lines, rects = [], []
+
+    def level(color):
+        if color == "none":
+            return 0
+        return min(1.0, max(int(color[i:i + 2], 16) for i in (1, 3, 5)) / 222)
+
+    def visit(node, inherited):
+        kind = node.tag.rsplit("}", 1)[-1]
+        if kind == "defs":
+            return
+        attrs = dict(inherited)
+        attrs.update(node.attrib)
+        stroke = float(attrs.get("stroke-width", 1))
+        brightness = level(attrs.get("stroke", "#f4f4f2"))
+        points = []
+        if kind == "line":
+            points = [(float(attrs["x1"]), float(attrs["y1"])), (float(attrs["x2"]), float(attrs["y2"]))]
+        elif kind in ("polygon", "polyline"):
+            numbers = [float(n) for n in re.findall(r"[-+]?\d*\.?\d+", attrs["points"])]
+            points = list(zip(numbers[::2], numbers[1::2]))
+            if kind == "polygon" and points:
+                points.append(points[0])
+        elif kind == "rect" and attrs.get("fill", "none").lower() not in ("none", "#08080a"):
+            rects.append((float(attrs.get("x", 0)), float(attrs.get("y", 0)),
+                          float(attrs["width"]), float(attrs["height"]), level(attrs["fill"])))
+        for a, b in zip(points, points[1:]):
+            lines.append((a, b, stroke, brightness))
+        for child in node:
+            visit(child, attrs)
+
+    visit(ET.parse(path).getroot(), {})
+    points = [p for a, b, _, _ in lines for p in (a, b)]
+    points += [p for x, y, w, h, _ in rects for p in ((x, y), (x + w, y + h))]
+    bounds = (min(x for x, _ in points), min(y for _, y in points),
+              max(x for x, _ in points), max(y for _, y in points))
+    return lines, rects, bounds
+
+
+def build_mark(name, W, H):
+    try:
+        lines, rects, (x0, y0, x1, y1) = mark_geometry(name)
+    except (OSError, ET.ParseError, ValueError) as error:
+        log(str(error))
+        return build_logo(1, W, H)
+    # Logical pixels are a character wide and half a character high; no background colours.
+    scale = min(max(1, min(100, W - 6)) / (x1 - x0), max(2, (H - 8) * 2) / (y1 - y0))
+    w, pixel_h = math.ceil((x1 - x0) * scale) + 3, math.ceil((y1 - y0) * scale) + 3
+    h = (pixel_h + 1) // 2
+    ox, oy = (W - w) // 2, (H - h - 2) // 2
+    pixels = {}
+
+    def point(p):
+        return ((p[0] - x0) * scale + 1, (p[1] - y0) * scale + 1)
+
+    def plot(x, y, brightness, along):
+        if brightness > pixels.get((x, y), (0, 0))[0]:
+            pixels[(x, y)] = (brightness, along)
+
+    total = sum(math.dist(a, b) for a, b, _, _ in lines) or 1
+    walked = 0
+    for a, b, stroke, brightness in lines:
+        length = math.dist(a, b)
+        a, b = point(a), point(b)
+        count = max(1, math.ceil(math.dist(a, b) * 2))
+        radius = max(0.5, stroke * scale / 2)
+        reach = math.ceil(radius + 1)
+        for i in range(count + 1):
+            q = i / count
+            x, y = a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q
+            for yy in range(round(y) - reach, round(y) + reach + 1):
+                for xx in range(round(x) - reach, round(x) + reach + 1):
+                    distance = math.hypot(xx - x, yy - y)
+                    if distance <= radius + 0.8:
+                        amount = brightness if distance <= radius else brightness * 0.12
+                        plot(xx, yy, amount, (walked + q * length) / total)
+        walked += length
+    for x, y, rw, rh, brightness in rects:
+        a, b = point((x, y)), point((x + rw, y + rh))
+        for yy in range(math.floor(a[1]), math.ceil(b[1])):
+            for xx in range(math.floor(a[0]), math.ceil(b[0])):
+                plot(xx, yy, brightness, (y - y0) / (y1 - y0))
+
+    cells = {}
+    for (x, y), (brightness, along) in pixels.items():
+        key = (x, y // 2)
+        mask, prior_level, prior_along = cells.get(key, (0, 0, 0))
+        cells[key] = (mask | (1 if y % 2 == 0 else 2), max(prior_level, brightness),
+                      along if brightness >= prior_level else prior_along)
+    out = []
+    for (x, y), (mask, brightness, along) in cells.items():
+        if not (0 <= ox + x < W and 0 <= oy + y < H):
+            continue
+        c = Cell()
+        c.x, c.y = ox + x, oy + y
+        c.ch, c.kind = {1: "▀", 2: "▄", 3: "█"}[mask], (brightness, along)
+        c.nx, c.ny, c.r = x / max(1, w), y / max(1, h), random.random()
+        out.append(c)
+    caption = "Yunagi · techBob"
+    for i, ch in enumerate(caption):
+        x, y = (W - len(caption)) // 2 + i, oy + h + 1
+        if 0 <= x < W and 0 <= y < H:
+            c = Cell()
+            c.x, c.y, c.ch, c.kind = x, y, ch, "tag2" if i >= len(caption) - 3 else "tag1"
+            c.nx, c.ny, c.r = i / len(caption), 1, random.random()
+            out.append(c)
+    return out, ox, oy, w, h
+
+
+# --- Effects ------------------------------------------------------------------
+# Each effect draws the logo at progress p (0 = gone, 1 = in place) into frame.
+# Out is the same effect run backwards.
+
+def fx_rain(s, frame, p, t, out):
+    # Lock in random order with a white flash
+    for c in s.logo:
+        if c.r < p:
+            frame[(c.x, c.y)] = (c.ch, mix(WHITE, s.col(c, t), (p - c.r) * 2.5))
+
+
+def fx_beams(s, frame, p, t, out):
+    # A light beam per row sweeps across and leaves the logo behind it
+    rows = sorted({c.y for c in s.logo})
+    span = s.w + 30
+    heads = {}
+    for i, y in enumerate(rows):
+        q = clamp(p * 1.6 - i / len(rows) * 0.6)
+        d = 1 if i % 2 == 0 else -1
+        hx = s.ox - 15 + q * span if d > 0 else s.ox + s.w + 15 - q * span
+        heads[y] = (hx, d, q)
+        if 0 < q < 1:
+            for k in range(40):
+                x = int(hx) - k * d
+                if 0 <= x < s.W:
+                    col = mix(WHITE, hsv(x / s.W + t * 0.3, 0.85, 1), k / 12) if k else WHITE
+                    frame[(x, y)] = ("━" if k < 28 else "─", mix(col, BG, max(0, k - 20) / 20))
+                    for gy in (y - 1, y + 1):
+                        if 0 <= gy < s.H and k < 24 and (x, gy) not in frame:
+                            frame[(x, gy)] = ("─", mix(BG, col, 0.35 * (1 - k / 24)))
+    for c in s.logo:
+        hx, d, q = heads[c.y]
+        behind = (c.x < hx) if d > 0 else (c.x > hx)
+        if q >= 1 or behind:
+            frame[(c.x, c.y)] = (c.ch, mix(WHITE, s.col(c, t), abs(c.x - hx) / 10))
+
+
+def fx_fly(s, frame, p, t, out):
+    # Every cell flies from its start point to its place
+    for c in s.logo:
+        q = ease((p - c.r * 0.5) / 0.5)
+        if q <= 0:
+            continue
+        x = int(round(c.sx + (c.x - c.sx) * q))
+        y = int(round(c.sy + (c.y - c.sy) * q))
+        if not (0 <= x < s.W and 0 <= y < s.H):
+            continue
+        col = s.col(c, t)
+        if q < 1:
+            for k, fade in ((0.06, 0.55), (0.12, 0.3), (0.2, 0.15)):
+                tq = max(q - k, 0)
+                tx = int(round(c.sx + (c.x - c.sx) * tq)); ty = int(round(c.sy + (c.y - c.sy) * tq))
+                if 0 <= tx < s.W and 0 <= ty < s.H and (tx, ty) not in frame:
+                    frame[(tx, ty)] = ("·", mix(BG, col, fade))
+            frame[(x, y)] = (random.choice("·•*+✦") if q < 0.85 else c.ch, mix(WHITE, col, q))
+        else:
+            frame[(x, y)] = (c.ch, col)
+
+
+def fx_decrypt(s, frame, p, t, out):
+    # Scrambled glyphs that resolve left to right
+    for c in s.logo:
+        edge = c.nx * 0.7 + c.r * 0.3
+        if p * 1.3 - 0.3 > edge:
+            frame[(c.x, c.y)] = (c.ch, s.col(c, t))
+        elif p > c.r * 0.3:
+            col = ACCENT if random.random() < 0.08 else (90, 90, 100)
+            frame[(c.x, c.y)] = (random.choice(GLYPHS), col)
+
+
+def fx_trace(s, frame, p, t, out):
+    # Follow the actual path of a spiral or the edges of a cut crystal.
+    for c in s.logo:
+        at = c.kind[1] if isinstance(c.kind, tuple) else c.nx
+        if at <= p and p > 0:
+            color = s.col(c, t)
+            if 0 < p - at < 0.06 and p < 1:
+                color = mix(color, WHITE, 0.8 * (1 - (p - at) / 0.06))
+            frame[(c.x, c.y)] = (c.ch, color)
+
+
+def fx_vortex(s, frame, p, t, out):
+    # Every cell spirals in from far out, several turns, to its place
+    cx, cy = s.W / 2, s.H / 2
+    R = max(s.W / 2, s.H)
+    for c in s.logo:
+        if not hasattr(c, "pa"):
+            dx, dy = (c.x - cx) / 2, c.y - cy
+            c.pr, c.pa = math.hypot(dx, dy), math.atan2(dy, dx)
+        q = ease((p - c.r * 0.35) / 0.65)
+        if q <= 0:
+            continue
+        col = s.col(c, t)
+        if q >= 1:
+            frame[(c.x, c.y)] = (c.ch, col)
+            continue
+        r = c.pr + (R - c.pr) * (1 - q)
+        a = c.pa + (1 - q) * 4 * math.pi
+        x, y = int(round(cx + 2 * r * math.cos(a))), int(round(cy + r * math.sin(a)))
+        if 0 <= x < s.W and 0 <= y < s.H:
+            frame[(x, y)] = (random.choice("·•*") if q < 0.8 else c.ch, mix(WHITE, col, q))
+
+
+class Vortex:
+    """Particles pulled in along a turning spiral toward the centre."""
+    def __init__(s, n):
+        s.n, s.ps = n, []
+
+    def draw(s, st, frame, density, t):
+        cx, cy = st.W / 2, st.H / 2
+        R = max(st.W / 2, st.H)
+        while len(s.ps) < s.n * density:
+            s.ps.append([random.uniform(R * 0.4, R), random.uniform(0, 2 * math.pi), random.random()])
+        for q in s.ps:
+            q[0] *= 0.988
+            q[1] += 0.025 + 1.2 / max(q[0], 1)
+        s.ps = [q for q in s.ps if q[0] > 2]
+        for r, a, h in s.ps:
+            x, y = int(cx + 2 * r * math.cos(a)), int(cy + r * math.sin(a))
+            if 0 <= x < st.W and 0 <= y < st.H and (x, y) not in frame:
+                frame[(x, y)] = ("•" if r < R * 0.3 else "·", hsv(a / (2 * math.pi) + h * 0.2 + t * 0.05, 0.75, 0.55 + 0.45 * (1 - r / R)))
+
+
+def fx_weave(s, frame, p, t, out):
+    # Alternating rows slide in from opposite sides and meet at the centre.
+    for c in s.logo:
+        q = ease((p - c.ny * 0.2) / 0.8)
+        if q <= 0:
+            continue
+        side = -1 if (c.y - s.oy) % 2 == 0 else 1
+        x = round(c.x + side * (1 - q) * (s.W + s.w) / 2)
+        if 0 <= x < s.W and 0 <= c.y < s.H:
+            frame[(x, c.y)] = (c.ch, mix(BG, s.col(c, t), q))
+
+
+# --- Backgrounds --------------------------------------------------------------
+
+class Rain:
+    def __init__(s, base):
+        s.base, s.drops = base, []
+
+    def draw(s, st, frame, density, t):
+        W, H = st.W, st.H
+        n = W * 0.014 * density
+        for _ in range(int(n) + (random.random() < n % 1)):
+            s.drops.append([random.randrange(W), -random.randrange(H // 2),
+                            random.uniform(0.35, 1.0), random.randint(6, H // 2 + 6)])
+        for d in s.drops:
+            d[1] += d[2]
+        s.drops = [d for d in s.drops if d[1] - d[3] < H]
+        for x, y, _, ln in s.drops:
+            base = s.base(x, W, t)
+            for k in range(ln):
+                cy = int(y) - k
+                if 0 <= cy < H:
+                    col = mix(base, WHITE, 0.8) if k == 0 else mix(base, BG, (k / ln) ** 0.7)
+                    frame[(x, cy)] = (st.glyph[cy][x], col)
+
+
+class Drift:
+    """Sparse particles drifting up (sparks) or down (snow)."""
+    def __init__(s, chars, cols, vy, n):
+        s.chars, s.cols, s.vy, s.n, s.ps = chars, cols, vy, n, []
+
+    def draw(s, st, frame, density, t):
+        while len(s.ps) < s.n * density:
+            y = st.H if s.vy < 0 else -1
+            s.ps.append([random.uniform(0, st.W), y + random.uniform(0, 5) * (1 if s.vy < 0 else -1),
+                         random.uniform(0.5, 1.5) * s.vy, random.choice(s.cols), random.choice(s.chars)])
+        for q in s.ps:
+            q[0] += random.uniform(-0.3, 0.3)
+            q[1] += q[2]
+        s.ps = [q for q in s.ps if -2 < q[1] < st.H + 6]
+        for x, y, _, col, ch in s.ps:
+            if 0 <= int(x) < st.W and 0 <= int(y) < st.H:
+                frame[(int(x), int(y))] = (ch, col)
+
+
+# --- Styles -------------------------------------------------------------------
+# intro, hold and outro in seconds; bg density follows the phase
+
+STYLES = [
+    dict(name="matrix", scale=1, col=matrix_col, fx=fx_rain, intro=9, hold=9, outro=3,
+         bg=lambda: Rain(lambda x, W, t: ACCENT), bg_rain=True),
+    dict(name="rainbow-rain", scale=1, col=matrix_col, fx=lambda *a: None, intro=2, hold=20, outro=2,
+         bg=lambda: Rain(lambda x, W, t: hsv(x / W + t * 0.08, 0.8, 1)), nologo=True),
+    dict(name="prism", scale=2, col=prism_col, fx=fx_beams, intro=4, hold=10, outro=3,
+         bg=lambda: None),
+    dict(name="ember", scale=1, col=ember_col, fx=fx_fly, intro=4, hold=10, outro=3,
+         bg=lambda: Drift("·•*✦", [(255, 160, 50), (240, 70, 60), (255, 220, 120), (255, 245, 200)], -0.9, 180),
+         start="below"),
+    dict(name="glacier", scale=2, col=glacier_col, fx=fx_fly, intro=4, hold=10, outro=3,
+         bg=lambda: Drift("·*+❄", [(170, 250, 255), (90, 150, 240), (235, 250, 255)], 0.45, 220),
+         start="scatter"),
+    dict(name="mono", scale=1, col=mono_col, fx=fx_decrypt, intro=4, hold=10, outro=2,
+         bg=lambda: None, glitch=True),
+    dict(name="prisma-aurora", mark="prisma", col=aurora_col, fx=fx_fly, intro=5, hold=12, outro=4,
+         bg=lambda: Drift("·+", [(100, 220, 255), (210, 110, 255), (110, 255, 180)], -0.15, 18)),
+    dict(name="kristall-spectrum", mark="kristall", col=spectrum_col, fx=fx_beams, intro=5, hold=12, outro=3,
+         bg=lambda: None),
+    dict(name="diamant-neon", mark="diamant", col=spectrum_col, fx=fx_trace, intro=6, hold=12, outro=4,
+         bg=lambda: None),
+    dict(name="spiral-vortex", mark="spiral", col=vortex_col, fx=fx_vortex, intro=6, hold=14, outro=4,
+         bg=lambda: Vortex(260)),
+    dict(name="oktaeder-cosmic", mark="oktaeder", col=aurora_col, fx=fx_weave, intro=5, hold=12, outro=4,
+         bg=lambda: None),
+    dict(name="briljant-rainbow", mark="briljant", col=spectrum_col, fx=fx_fly, intro=5, hold=12, outro=4,
+         bg=lambda: Drift("·*", [(255, 150, 210), (130, 220, 255), (255, 220, 130)], 0.12, 20),
+         start="below"),
+]
+
+
+class Scene:
+    pass
+
+
+def make_scene(style, W, H, glyph):
+    s = Scene()
+    s.W, s.H, s.glyph, s.style = W, H, glyph, style
+    s.col = style["col"]
+    if style.get("nologo"):
+        s.logo, s.ox, s.oy, s.w, s.h = [], 0, 0, 0, 0
+    elif style.get("mark"):
+        s.logo, s.ox, s.oy, s.w, s.h = build_mark(style["mark"], W, H)
+    else:
+        s.logo, s.ox, s.oy, s.w, s.h = build_logo(style["scale"], W, H)
+    for c in s.logo:
+        if style.get("start") == "below":
+            c.sx, c.sy = c.x + random.uniform(-10, 10), H + random.uniform(0, H / 2)
+        else:
+            c.sx, c.sy = random.uniform(0, W), random.uniform(0, H)
+    s.bg = style["bg"]()
+    s.length = style["intro"] + style["hold"] + style["outro"] + 0.8
+    return s
+
+
+def main():
+    W, H = shutil.get_terminal_size()
+    out = sys.stdout
+    glyph = [[random.choice(GLYPHS) for _ in range(W)] for _ in range(H)]
+    prev = [[None] * W for _ in range(H)]
+    order = list(range(len(STYLES)))
+    random.shuffle(order)
+    sequence = os.environ.get("YUNAGI_SS_STYLE") in ("all", "originals")
+    if sequence:
+        order = [i for i, st in enumerate(STYLES) if st.get("mark")]
+        order += [i for i, st in enumerate(STYLES) if not st.get("mark")]
+    if os.environ.get("YUNAGI_SS_STYLE") == "originals":
+        order = [i for i, st in enumerate(STYLES) if not st.get("mark")]
+    elif os.environ.get("YUNAGI_SS_STYLE") == "marks":
+        order = [i for i, st in enumerate(STYLES) if st.get("mark")]
+    elif os.environ.get("YUNAGI_SS_STYLE"):
+        order = [next(i for i, st in enumerate(STYLES) if st["name"] == os.environ["YUNAGI_SS_STYLE"])]
+    idx = 0
+    s = make_scene(STYLES[order[0]], W, H, glyph)
+    log(f"style {s.style['name']}")
+    scene_start = time.monotonic()
+    start = scene_start
+
+    out.write("\x1b[?1049h\x1b[?25l\x1b[?1003h\x1b[2J")
+    out.flush()
+
+    while True:
+        now = time.monotonic()
+        t = now - scene_start
+        if t >= s.length:
+            idx += 1
+            s = make_scene(STYLES[order[idx % len(order)]], W, H, glyph)
+            log(f"style {s.style['name']}")
+            scene_start, t = now, 0.0
+        st = s.style
+        intro, hold, outro = st["intro"], st["hold"], st["outro"]
+
+        if st.get("bg_rain"):
+            # Matrix: pure rain for half the intro, then the logo locks in
+            if t < intro / 2:
+                p, density = 0.0, 1.0
+            elif t < intro:
+                p = (t - intro / 2) / (intro / 2)
+                density = 1 - 0.85 * p
+            elif t < intro + hold:
+                p, density = 1.0, 0.35
+            else:
+                p = clamp(1 - (t - intro - hold) / outro)
+                density = 0.35 + 0.65 * (1 - p)
+        else:
+            if t < intro:
+                p = t / intro
+            elif t < intro + hold:
+                p = 1.0
+            else:
+                p = clamp(1 - (t - intro - hold) / outro)
+            density = 1.0
+
+        for _ in range(W * H // 40):
+            glyph[random.randrange(H)][random.randrange(W)] = random.choice(GLYPHS)
+
+        frame = {}
+        if s.bg:
+            s.bg.draw(s, frame, density, t)
+        hold_t = max(t - intro, 0)
+        st["fx"](s, frame, p, hold_t, t >= intro + hold)
+
+        # During the hold a highlight sweeps across the logo
+        if intro <= t < intro + hold:
+            sweep = (t - intro) / hold
+            for c in s.logo:
+                cell = frame.get((c.x, c.y))
+                if not cell:
+                    continue
+                wave = c.nx - sweep * 1.6 + 0.3
+                if 0 <= wave < 0.2:
+                    frame[(c.x, c.y)] = (cell[0], mix(cell[1], WHITE, 0.85 * (1 - abs(wave - 0.1) / 0.1)))
+                if st.get("glitch") and random.random() < 0.03:
+                    frame[(c.x, c.y)] = (random.choice(GLYPHS), random.choice((ACCENT, WHITE, (90, 90, 100))))
+
+        # Extra life during the hold: glacier glints, mono row tears, ember heat
+        if intro <= t < intro + hold:
+            name = st["name"]
+            if name == "glacier":
+                for c in random.sample(s.logo, min(len(s.logo), 6)):
+                    if (c.x, c.y) in frame:
+                        frame[(c.x, c.y)] = ("✦", WHITE)
+            elif name == "mono" and int(t * 3) % 4 == 0:
+                rows = random.sample(sorted({c.y for c in s.logo}), 2)
+                shift = random.choice((-6, -3, 3, 6))
+                for y in rows:
+                    line = {x: v for (x, yy), v in frame.items() if yy == y}
+                    for x in line:
+                        frame.pop((x, y), None)
+                    for x, v in line.items():
+                        if 0 <= x + shift < W:
+                            frame[(x + shift, y)] = (v[0], ACCENT if random.random() < 0.3 else v[1])
+            elif name == "ember":
+                for c in random.sample(s.logo, min(len(s.logo), 10)):
+                    if (c.x, c.y) in frame:
+                        frame[(c.x, c.y)] = (frame[(c.x, c.y)][0], (255, 245, 200))
+
+        buf = []
+        for y in range(H):
+            row = prev[y]
+            for x in range(W):
+                cell = frame.get((x, y))
+                if cell != row[x]:
+                    row[x] = cell
+                    if cell is None:
+                        buf.append(f"\x1b[{y + 1};{x + 1}H ")
+                    else:
+                        r, g, b = cell[1]
+                        buf.append(f"\x1b[{y + 1};{x + 1}H\x1b[38;2;{r};{g};{b}m{cell[0]}")
+        out.write("".join(buf))
+        out.flush()
+
+        # Any key or mouse movement ends it (after a short grace period)
+        rest = 1 / FPS - (time.monotonic() - now)
+        if select.select([sys.stdin], [], [], max(rest, 0))[0]:
+            data = os.read(sys.stdin.fileno(), 64)
+            if now - start > 1.0 and data not in (b"\x1b[I", b"\x1b[O"):
+                if sequence and data not in (b"\x1b", b"q", b"Q"):
+                    continue
+                log(f"input {data!r}")
+                return
+
+
+if __name__ == "__main__":
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda n, _: (log(f"signal {n}"), sys.exit(0)))
+    log("start")
+    try:
+        tty.setraw(fd)
+        main()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    except Exception as e:
+        log(f"crash {e!r}")
+        raise
+    finally:
+        sys.stdout.write("\x1b[?1003l\x1b[0m\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        # Closing one screen closes them all
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        subprocess.run(["pkill", "-f", "^python3 [^ ]*yunagi-screensave[r] --run"])

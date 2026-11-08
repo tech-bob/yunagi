@@ -1,0 +1,10 @@
+[Plymouth Theme]
+Name=Yunagi Ion
+Description=The yunagi wordmark with an orbiting light.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/yunagi-ion
+ScriptFile=/usr/share/plymouth/themes/yunagi-ion/yunagi-ion.script
+Font=Noto Sans 14
+ConsoleLogBackgroundColor=0x0008090e

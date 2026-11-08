@@ -1,0 +1,29 @@
+# Installed with every desktop (Yunagi, GNOME); not with Minimal
+
+# Look
+adw-gtk-theme
+papirus-icon-theme
+ttf-hack-nerd
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+
+# Terminal
+kitty
+fish
+fastfetch
+vim
+nano
+
+# System
+python
+plymouth
+gnome-keyring
+pipewire
+pipewire-pulse
+wireplumber
+networkmanager
+bluez
+bluez-utils
+power-profiles-daemon
+upower

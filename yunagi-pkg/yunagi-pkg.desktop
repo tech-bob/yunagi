@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Packages
+Comment=Search, install and remove software
+Exec=kitty --class yunagi-pkg -o confirm_os_window_close=0 -o remember_window_size=no -o initial_window_width=1100 -o initial_window_height=760 -e yunagi-pkg
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;

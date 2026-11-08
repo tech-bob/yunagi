@@ -1,0 +1,48 @@
+#!/bin/sh
+# yunagi-screenrecord [--region] [--desktop] [--mic] | --stop
+
+if pgrep -f '^gpu-screen-recorder' >/dev/null; then
+    pkill -INT -f '^gpu-screen-recorder'
+    n=0
+    while pgrep -f '^gpu-screen-recorder' >/dev/null && [ $n -lt 50 ]; do
+        sleep 0.1
+        n=$((n + 1))
+    done
+    pgrep -f '^gpu-screen-recorder' >/dev/null && pkill -9 -f '^gpu-screen-recorder'
+    f=$(ls -t "$HOME"/Videos/screenrecording-*.mp4 2>/dev/null | head -1)
+    (
+        [ "$(notify-send -t 10000 -A open=Play "Recording saved" "$f")" = open ] && mpv "$f"
+    ) >/dev/null 2>&1 &
+    exit 0
+fi
+
+[ "$1" = "--stop" ] && exit 1
+
+region=false
+audio=""
+for a in "$@"; do
+    case "$a" in
+        --region) region=true ;;
+        --desktop) audio="${audio:+$audio|}default_output" ;;
+        --mic) audio="${audio:+$audio|}default_input" ;;
+    esac
+done
+
+if $region; then
+    geom=$(slurp -d -f '%wx%h+%x+%y') || exit 1
+    target="$geom"
+else
+    target=$(hyprctl monitors -j | python3 -c 'import json,sys; print(next(m["name"] for m in json.load(sys.stdin) if m.get("focused")))')
+fi
+
+mkdir -p "$HOME/Videos"
+file="$HOME/Videos/screenrecording-$(date +%Y-%m-%d_%H-%M-%S).mp4"
+
+# The bar shows recording state from these calls; it does not poll.
+qs ipc call record started >/dev/null 2>&1
+if [ -n "$audio" ]; then
+    gpu-screen-recorder -w "$target" -k auto -f 60 -fm cfr -fallback-cpu-encoding yes -a "$audio" -ac aac -o "$file"
+else
+    gpu-screen-recorder -w "$target" -k auto -f 60 -fm cfr -fallback-cpu-encoding yes -o "$file"
+fi
+qs ipc call record stopped >/dev/null 2>&1

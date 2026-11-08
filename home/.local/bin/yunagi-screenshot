@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+case "${1:-output}" in
+    region)
+        hyprpicker -r -z & pick=$!
+        sleep 0.2
+        geom=$(slurp -d) || { kill $pick; exit 1; }
+        grim -g "$geom" - | wl-copy --type image/png
+        kill $pick
+        ;;
+    *)
+        out=$(hyprctl monitors -j | python3 -c 'import json,sys; ms=json.load(sys.stdin); print(next(m["name"] for m in ms if m.get("focused")))')
+        grim -o "$out" - | wl-copy --type image/png
+        ;;
+esac
+
+pw-play /usr/share/sounds/freedesktop/stereo/camera-shutter.oga >/dev/null 2>&1 &

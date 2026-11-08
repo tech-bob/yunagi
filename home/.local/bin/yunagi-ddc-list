@@ -1,0 +1,39 @@
+#!/bin/sh
+# Prints "CONNECTOR BUS CURRENT MAX" for each DDC/CI monitor.
+# Raw i2ctransfer: ddcutil cannot read EDID over DP MST.
+command -v i2ctransfer >/dev/null || exit 0
+
+gpu_bus() {
+    d=$(readlink -f "$1")
+    while [ "$d" != /sys/devices ] && [ "$d" != / ]; do
+        [ -f "$d/class" ] && case $(cat "$d/class") in 0x03*) return 0 ;; esac
+        d=${d%/*}
+    done
+    return 1
+}
+
+# MST buses first: the root AUX bus can echo a downstream monitor's EDID.
+buses=""
+for a in $(grep -l DPMST /sys/bus/i2c/devices/i2c-*/name | sed 's,/name$,,') \
+         $(grep -L DPMST /sys/bus/i2c/devices/i2c-*/name | sed 's,/name$,,'); do
+    gpu_bus "$a" || continue
+    n=${a##*-}
+    h=$(i2ctransfer -y "$n" w1@0x50 0 r16@0x50 2>/dev/null) || continue
+    buses="$buses$n $(echo $h)
+"
+done
+
+for c in /sys/class/drm/card*-*; do
+    [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+    case $c in *eDP*|*LVDS*) continue ;; esac
+    e=$(od -An -tx1 -N16 "$c/edid" 2>/dev/null | sed 's/ \([0-9a-f][0-9a-f]\)/ 0x\1/g') || continue
+    [ -n "$e" ] || continue
+    b=$(printf %s "$buses" | while read -r n h; do [ "$h" = "$(echo $e)" ] && echo "$n" && break; done)
+    [ -n "$b" ] || continue
+    i2ctransfer -y "$b" w5@0x37 0x51 0x82 0x01 0x10 0xac 2>/dev/null || continue
+    sleep 0.05
+    set -- $(i2ctransfer -y "$b" r11@0x37 2>/dev/null)
+    [ "$#" -ge 10 ] && [ "$4" = 0x00 ] && [ "$5" = 0x10 ] || continue
+    echo "${c##*/card[0-9]-} $b $(($9 * 256 + ${10})) $(($7 * 256 + $8))"
+done
+exit 0

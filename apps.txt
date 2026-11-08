@@ -1,0 +1,36 @@
+# Programs installed if you answer yes in install.sh
+
+# Web
+firefox
+torbrowser-launcher
+
+# Text and documents
+apostrophe
+evince
+obsidian
+
+# Media
+celluloid
+mpv
+qbittorrent
+
+# Terminal
+tmux
+neovim
+bat
+eza
+glow
+termdown
+bash-completion
+which
+less
+
+# Network
+nmap
+openssh
+wireguard-tools
+
+# Sync and passwords
+rclone
+rsync
+bitwarden

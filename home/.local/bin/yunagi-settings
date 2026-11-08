@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""Read and update the settings shown in Yunagi's settings menu."""
+
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+import time
+
+
+# Screens off 5 s after locking, if still locked
+DPMS_OFF = '''sleep 5; pgrep -x hyprlock && hyprctl dispatch 'hl.dsp.dpms({action = "disable"})' '''.strip()
+BLOCK = re.compile(r"^listener\s*\{\n.*?^\}", re.M | re.S)
+
+
+def listener(text, marker):
+    matches = [m for m in BLOCK.finditer(text) if marker in m.group()]
+    if len(matches) != 1:
+        raise ValueError(f"Cannot identify the {marker} setting in hypridle.conf.")
+    return matches[0]
+
+
+def value(text, key):
+    match = re.search(rf"^[ \t]*{re.escape(key)}[ \t]*=[ \t]*([^\n]*)", text, re.M)
+    if not match:
+        raise ValueError(f"Missing {key} in hypridle.conf.")
+    return match[1].split("#", 1)[0].strip()
+
+
+def replace_value(text, key, new):
+    pattern = rf"^([ \t]*{re.escape(key)}[ \t]*=)[^\n]*"
+    result, count = re.subn(pattern, lambda m: m[1] + " " + str(new), text, count=1, flags=re.M)
+    if not count:
+        raise ValueError(f"Missing {key} in hypridle.conf.")
+    return result
+
+
+def read_settings(text):
+    saver = listener(text, "yunagi-screensaver").group()
+    lock = listener(text, "lock-session").group()
+    return {
+        "screensaver_enabled": value(saver, "on-timeout") != ":",
+        "screensaver_seconds": int(value(saver, "timeout")),
+        "lock_seconds": int(value(lock, "timeout")),
+        "screen_off_on_lock": bool(value(text, "on_lock_cmd")),
+    }
+
+
+def update_settings(text, key, raw):
+    settings = read_settings(text)
+    if key not in settings:
+        raise ValueError("Unknown setting.")
+    if key in ("screensaver_enabled", "screen_off_on_lock"):
+        if raw not in ("true", "false"):
+            raise ValueError("Expected true or false.")
+        new = raw == "true"
+    else:
+        new = int(raw)
+        if not 60 <= new <= 86400:
+            raise ValueError("Choose a time between 1 minute and 24 hours.")
+    settings[key] = new
+    if settings["screensaver_enabled"] and settings["screensaver_seconds"] >= settings["lock_seconds"]:
+        raise ValueError("The screensaver must start before automatic locking.")
+    if key == "screen_off_on_lock":
+        return replace_value(text, "on_lock_cmd", DPMS_OFF if new else "")
+    marker = "lock-session" if key == "lock_seconds" else "yunagi-screensaver"
+    match = listener(text, marker)
+    block = match.group()
+    if key == "screensaver_enabled":
+        cmd = "~/.local/bin/yunagi-screensaver" if new else ": # yunagi-screensaver disabled"
+        block = replace_value(block, "on-timeout", cmd)
+    else:
+        block = replace_value(block, "timeout", new)
+    if key == "lock_seconds":
+        old_lock = read_settings(text)["lock_seconds"]
+        power = next((m for m in BLOCK.finditer(text) if "dpms" in m.group()), None)
+        if power:
+            delay = max(0, int(value(power.group(), "timeout")) - old_lock)
+            power_block = replace_value(power.group(), "timeout", new + delay)
+            text = text[:power.start()] + power_block + text[power.end():]
+            match = listener(text, marker)
+    return text[:match.start()] + block + text[match.end():]
+
+
+def restart_idle():
+    result = subprocess.run(["pgrep", "-u", str(os.getuid()), "-x", "hypridle"], capture_output=True, text=True)
+    pids = [int(p) for p in result.stdout.split()]
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    for _ in range(40):
+        result = subprocess.run(["pgrep", "-u", str(os.getuid()), "-x", "hypridle"], capture_output=True)
+        if result.returncode:
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError("Could not restart the idle service.")
+    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "yunagi"
+    state.mkdir(parents=True, exist_ok=True)
+    logpath = state / "hypridle.log"
+    with logpath.open("w") as log:
+        proc = subprocess.Popen(["hypridle"], stdin=subprocess.DEVNULL, stdout=log,
+                                stderr=subprocess.STDOUT, start_new_session=True)
+    time.sleep(0.2)
+    if proc.poll() is not None or "Config has errors" in logpath.read_text():
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=2)
+        raise RuntimeError("The idle service could not load the settings.")
+
+
+# --- Night light: ~/.config/hypr/hyprsunset.conf ------------------------------
+
+SUNSET = Path.home() / ".config/hypr/hyprsunset.conf"
+DAY_PROFILE = "profile {\n    time = 07:00\n    identity = true\n}\n"
+
+
+def read_night():
+    text = SUNSET.read_text() if SUNSET.exists() else ""
+    temp = re.search(r"temperature\s*=\s*(\d+)", text)
+    auto = re.search(r"^profile\s*\{[^}]*^\s*temperature", text, re.M)
+    return {"night_temperature": int(temp[1]) if temp else 2750, "night_auto": bool(auto)}
+
+
+def write_night(night):
+    t = night["night_temperature"]
+    if night["night_auto"]:
+        text = (f"# Neutral by day, night light from 20:00; Super+T switches it by hand\n{DAY_PROFILE}\n"
+                f"profile {{\n    time = 20:00\n    temperature = {t}\n}}\n")
+    else:
+        text = f"# Neutral; Super+T switches the night light (temperature = {t})\n{DAY_PROFILE}"
+    SUNSET.write_text(text)
+    subprocess.run(["pkill", "-u", str(os.getuid()), "-x", "hyprsunset"])
+    time.sleep(0.2)
+    subprocess.Popen(["hyprsunset"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+# --- Keyboard, mouse and touchpad: ~/.config/hypr/settings.lua -----------------
+
+INPUT = Path.home() / ".config/hypr/settings.lua"
+INPUT_DEFAULTS = {"kb_layout": "us", "repeat_rate": 25, "repeat_delay": 600,
+                  "sensitivity": 0.4, "natural_scroll": True, "tap_to_click": True}
+
+
+def live_option(key, default):
+    """The value Hyprland runs with now, for keys settings.lua does not set."""
+    name = {"natural_scroll": "input:touchpad:natural_scroll",
+            "tap_to_click": "input:touchpad:tap-to-click"}.get(key, "input:" + key)
+    try:
+        res = subprocess.run(["hyprctl", "getoption", name, "-j"], capture_output=True, text=True, timeout=2)
+        data = json.loads(res.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return default
+    for field in ("str", "bool", "int", "float"):
+        if field in data:
+            v = data[field]
+            return round(v, 2) if field == "float" else v
+    return default
+
+
+def read_input():
+    text = INPUT.read_text() if INPUT.exists() else ""
+    out = {}
+    for key, default in INPUT_DEFAULTS.items():
+        m = re.search(rf"\b{key}\s*=\s*([^,\n]+)", text)
+        raw = m[1].strip().strip('"') if m else None
+        if raw is None:
+            out[key] = live_option(key, default)
+        elif isinstance(default, bool):
+            out[key] = raw == "true"
+        elif isinstance(default, int):
+            out[key] = int(raw)
+        elif isinstance(default, float):
+            out[key] = float(raw)
+        else:
+            out[key] = raw
+    return out
+
+
+def write_input(v):
+    lua = lambda x: str(x).lower() if isinstance(x, bool) else f'"{x}"' if isinstance(x, str) else str(x)
+    INPUT.write_text(
+        "-- Written by Yunagi's settings menu; loaded after the defaults, before your own lines\n"
+        "hl.config({\n    input = {\n"
+        + "".join(f"        {k} = {lua(v[k])},\n" for k in ("kb_layout", "repeat_rate", "repeat_delay", "sensitivity"))
+        + "        touchpad = {\n"
+        + "".join(f"            {k} = {lua(v[k])},\n" for k in ("natural_scroll", "tap_to_click"))
+        + "        },\n    },\n})\n")
+    subprocess.run(["hyprctl", "reload"], capture_output=True)
+
+
+# --- Git: name and email in the global git config ------------------------------
+
+def read_git():
+    def get(k):
+        try:
+            return subprocess.run(["git", "config", "--global", k], capture_output=True, text=True).stdout.strip()
+        except OSError:
+            return ""
+    return {"git_name": get("user.name"), "git_email": get("user.email")}
+
+
+def set_other(key, raw):
+    night, inp = read_night(), read_input()
+    if key in ("night_auto", "natural_scroll", "tap_to_click"):
+        if raw not in ("true", "false"):
+            raise ValueError("Expected true or false.")
+        new = raw == "true"
+    if key == "night_auto":
+        night[key] = new
+        write_night(night)
+    elif key == "night_temperature":
+        if not 1000 <= int(raw) <= 6000:
+            raise ValueError("Choose a temperature between 1000 and 6000 K.")
+        night[key] = int(raw)
+        write_night(night)
+    elif key == "kb_layout":
+        if not re.fullmatch(r"[a-z]{2,3}", raw):
+            raise ValueError("Unknown keyboard layout.")
+        inp[key] = raw
+        write_input(inp)
+    elif key in ("repeat_rate", "repeat_delay"):
+        inp[key] = int(raw)
+        write_input(inp)
+    elif key == "sensitivity":
+        if not -1 <= float(raw) <= 1:
+            raise ValueError("Sensitivity is between -1 and 1.")
+        inp[key] = float(raw)
+        write_input(inp)
+    elif key in ("natural_scroll", "tap_to_click"):
+        inp[key] = new
+        write_input(inp)
+    elif key in ("git_name", "git_email"):
+        if key == "git_email" and raw and "@" not in raw:
+            raise ValueError("That does not look like an email address.")
+        subprocess.run(["git", "config", "--global", "user." + key[4:], raw], check=True)
+    else:
+        raise ValueError("Unknown setting.")
+
+
+def get_all(idle_text):
+    out = {}
+    try:
+        out.update(read_settings(idle_text))
+    except ValueError:
+        pass
+    out.update(read_night())
+    out.update(read_input())
+    out.update(read_git())
+    return out
+
+
+def main():
+    config = Path.home() / ".config/hypr/hypridle.conf"
+    idle_text = lambda: config.read_text() if config.exists() else ""
+    if sys.argv[1:] == ["get"]:
+        print(json.dumps(get_all(idle_text())))
+        return
+    if len(sys.argv) != 4 or sys.argv[1] != "set":
+        raise ValueError("Usage: yunagi-settings get | set NAME VALUE")
+    if sys.argv[2] not in ("screensaver_enabled", "screensaver_seconds", "lock_seconds", "screen_off_on_lock"):
+        set_other(sys.argv[2], sys.argv[3])
+        print(json.dumps(get_all(idle_text())))
+        return
+    with config.open("r+") as file:
+        fcntl.flock(file, fcntl.LOCK_EX)
+        before = file.read()
+        after = update_settings(before, sys.argv[2], sys.argv[3])
+        if after != before:
+            file.seek(0)
+            file.write(after)
+            file.truncate()
+            file.flush()
+            try:
+                restart_idle()
+            except Exception:
+                file.seek(0)
+                file.write(before)
+                file.truncate()
+                file.flush()
+                restart_idle()
+                raise
+        print(json.dumps(get_all(after)))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

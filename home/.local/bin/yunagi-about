@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+# About view: the Yunagi mark with a light sweep, system info beside it. Any key closes.
+import os, re, select, signal, subprocess, sys, termios, time, tty
+
+HOME = os.path.expanduser("~")
+QS = os.path.join(HOME, ".config/quickshell")
+PAL = {
+    "aurora": ["#67e8f9", "#60a5fa", "#a78bfa", "#f472b6"],
+    "solnedgang": ["#fbbf24", "#f97316", "#ef4444", "#db2777"],
+    "hav": ["#2dd4bf", "#38bdf8", "#3b82f6", "#6366f1"],
+    "neon": ["#4ade80", "#22d3ee", "#e879f9"],
+    "godis": ["#f472b6", "#fde68a", "#67e8f9"],
+    "is": ["#f4f4f2", "#93c5fd", "#3b82f6"],
+    "original": ["#f4f4f2", "#f4f4f2"],
+}
+GIRDLE, LIGHT = (74, 222, 128), (244, 244, 242)
+ESC = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+hx = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+def grad(stops, t):
+    t = min(max(t, 0), 1) * (len(stops) - 1); i = min(int(t), len(stops) - 2); f = t - i
+    a, b = hx(stops[i]), hx(stops[i + 1]); return tuple(round(x + (y - x) * f) for x, y in zip(a, b))
+
+try:
+    choice = open(os.path.join(HOME, ".local/state/yunagi/about-mark")).read().strip()
+except OSError:
+    choice = ""
+mark, _, pal = (choice or "diamant-solnedgang").partition("-")
+grid = open(os.path.join(QS, "mark/grid", mark + ".txt")).read().split("\n")
+grid = [r for r in grid if r]
+H, W = len(grid), len(grid[0])
+stops = ["#4ade80", "#22c55e"] if (mark, pal) == ("prisma", "original") else PAL.get(pal, PAL["neon"])
+dim = lambda c, k: tuple(round(v * k) for v in c)
+def colour(c, x, y):
+    if c == ".": return None
+    if c == "g" and pal == "original": return GIRDLE
+    if c == "p": return (185, 245, 208)
+    if pal == "original" and c in "dkn": return {"d": (106, 106, 120), "k": (31, 107, 65), "n": (74, 222, 128)}[c]
+    g = grad(stops, (x / W + y / H) / 2)
+    return {"f": .2, "F": .34, "d": .4, "k": .65}.get(c) and dim(g, {"f": .2, "F": .34, "d": .4, "k": .65}[c]) or g
+base = [[colour(c, x, y) for x, c in enumerate(row)] for y, row in enumerate(grid)]
+
+info = subprocess.run(["fastfetch", "-c", os.path.join(QS, "about.jsonc"), "--pipe", "false"],
+                      capture_output=True, text=True).stdout.rstrip("\n").split("\n")
+rows = H // 2
+GAP = 8
+infow = max(len(ESC.sub("", l)) for l in info)
+TOP = LEFT = ix = iy = 1
+def layout():
+    global TOP, LEFT, ix, iy
+    cols, lines = os.get_terminal_size()
+    h = max(rows, len(info))
+    LEFT = max(1, (cols - (W + GAP + infow)) // 2 + 1)
+    TOP = max(1, (lines - h) // 2 + 1) + (h - rows) // 2
+    ix = LEFT + W + GAP
+    iy = max(1, (lines - h) // 2 + 1) + (h - len(info)) // 2
+
+def cell(top, bot):
+    # no background colours: kitty draws them translucent
+    if top and bot: return "\x1b[38;2;%d;%d;%dm█" % top
+    if top: return "\x1b[49m\x1b[38;2;%d;%d;%dm▀" % top
+    if bot: return "\x1b[49m\x1b[38;2;%d;%d;%dm▄" % bot
+    return "\x1b[49m "
+
+def draw(band):
+    out = []
+    for r in range(rows):
+        line = ""
+        for x in range(W):
+            px = []
+            for y in (2 * r, 2 * r + 1):
+                c = base[y][x]
+                if c and grid[y][x] not in "fFdk" and band is not None and abs((x + y) - band) < 3: c = LIGHT
+                px.append(c)
+            line += cell(*px)
+        out.append("\x1b[%d;%dH%s\x1b[0m" % (TOP + r, LEFT, line))
+    sys.stdout.write("".join(out)); sys.stdout.flush()
+
+fd = sys.stdin.fileno()
+old = termios.tcgetattr(fd)
+try:
+    tty.setcbreak(fd)
+    sys.stdout.write("\x1b[?25l")
+    def full(*_):
+        layout()
+        sys.stdout.write("\x1b[2J")
+        for i, l in enumerate(info):
+            sys.stdout.write("\x1b[%d;%dH%s\x1b[0m" % (iy + i, ix, l))
+        draw(None)
+    signal.signal(signal.SIGWINCH, full)
+    time.sleep(0.15)
+    full()
+    band, wait = -6, 0.0
+    while True:
+        try:
+            if select.select([fd], [], [], 0.03)[0]:
+                break
+        except InterruptedError:
+            continue
+        if wait > 0:
+            wait -= 0.03; continue
+        band += 1.5
+        if band > W + H + 6:
+            draw(None); band, wait = -6, 2.5
+        else:
+            draw(band)
+finally:
+    termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    sys.stdout.write("\x1b[0m\x1b[?25h\x1b[2J\x1b[H"); sys.stdout.flush()

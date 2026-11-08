@@ -1,0 +1,35 @@
+# Yunagi (Hyprland); packages-common.txt is installed as well
+
+# Desktop
+hyprland
+hyprlock
+hypridle
+hyprpaper
+hyprsunset
+hyprpicker
+hyprshot
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+quickshell
+polkit-gnome
+
+# Look
+matugen
+
+# Programs
+nautilus
+imv
+
+# Tools used by the bar and scripts
+cliphist
+wl-clipboard
+grim
+slurp
+gpu-screen-recorder
+brightnessctl
+ddcutil
+i2c-tools
+libnotify
+
+# Login
+sddm

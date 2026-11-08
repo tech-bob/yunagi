@@ -1,0 +1,31 @@
+/* adw-gtk3 with colors from matugen (colors.css); dialogs styled like the Quickshell panels */
+@import url("colors.css");
+
+messagedialog, messagedialog .dialog-action-box {
+    background: @surface;
+    color: @text;
+}
+
+messagedialog .dialog-action-box {
+    padding: 0 14px 14px 14px;
+}
+
+messagedialog .dialog-action-area button {
+    border-radius: 12px;
+    margin: 0 4px;
+    padding: 8px 16px;
+    color: @text;
+    background: alpha(@surface_container_highest, 0.7);
+    border: 1px solid @outline_variant;
+    box-shadow: none;
+}
+
+messagedialog .dialog-action-area button:hover {
+    background: @surface_container_highest;
+}
+
+messagedialog .dialog-action-area button:focus,
+messagedialog .dialog-action-area button.default {
+    background: @secondary_container;
+    border-color: @primary;
+}

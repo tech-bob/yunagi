@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+# yunagi-display-scale MONITOR SCALE
+# Sets the scale of one monitor, lays the monitors out edge to edge from left to
+# right, and saves the layout to ~/.local/state/yunagi/monitors.lua (loaded by hyprland.lua).
+import json, os, subprocess, sys
+
+name, scale = sys.argv[1], float(sys.argv[2])
+mons = json.loads(subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True).stdout)
+mons.sort(key=lambda m: m["x"])
+
+lines, x = [], 0
+for m in mons:
+    s = scale if m["name"] == name else m["scale"]
+    mode = f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}'
+    lines.append(f'hl.monitor({{ output = "{m["name"]}", mode = "{mode}", position = "{x}x{m["y"]}", scale = "{s:g}" }})')
+    x += round(m["width"] / s)
+
+subprocess.run(["hyprctl", "eval", "\n".join(lines)], capture_output=True)
+
+state = os.path.expanduser("~/.local/state/yunagi/monitors.lua")
+os.makedirs(os.path.dirname(state), exist_ok=True)
+with open(state, "w") as f:
+    f.write("\n".join(lines) + "\n")

@@ -1,0 +1,672 @@
+#!/usr/bin/env bash
+# Yunagi installer: asks for language, keyboard, user, disk and so on, partitions the disk,
+# installs the base system with archinstall (silent) and then Yunagi.
+set -euo pipefail
+
+src=/usr/share/yunagi
+mnt=/mnt
+log=/var/log/yunagi-install.log
+
+# Yunagi colours use the palette slots below, so the Linux console keeps green green.
+unset NO_COLOR
+export GUM_CHOOSE_CURSOR_FOREGROUND=2 GUM_CHOOSE_SELECTED_FOREGROUND=2
+export GUM_CHOOSE_HEADER_FOREGROUND=7 GUM_CHOOSE_ITEM_FOREGROUND=8
+export GUM_FILTER_HEADER_FOREGROUND=7 GUM_FILTER_INDICATOR_FOREGROUND=2
+export GUM_FILTER_MATCH_FOREGROUND=2 GUM_FILTER_PROMPT_FOREGROUND=2
+export GUM_INPUT_CURSOR_FOREGROUND=2 GUM_INPUT_PROMPT_FOREGROUND=2
+export GUM_INPUT_HEADER_FOREGROUND=7 GUM_CONFIRM_PROMPT_FOREGROUND=7
+export GUM_CONFIRM_SELECTED_BACKGROUND=2 GUM_CONFIRM_SELECTED_FOREGROUND=0
+export GUM_CONFIRM_UNSELECTED_BACKGROUND="" GUM_CONFIRM_UNSELECTED_FOREGROUND=7
+export GUM_SPIN_SPINNER_FOREGROUND=2 GUM_SPIN_TITLE_FOREGROUND=7
+export GUM_TABLE_BORDER_FOREGROUND=8 GUM_TABLE_HEADER_FOREGROUND=7
+
+# The Linux console has 16 colours; set them to Yunagi's. Slot 6 is the pale green of the sweep.
+setpal() {
+    if [ "$TERM" = linux ]; then printf '\e]P%X%s' "$1" "$2"; else printf '\e]4;%d;#%s\a' "$1" "$2"; fi
+}
+# Rainbow for the logo: 1 red, 9 orange, 3 yellow, 2 green, 14 cyan, 4 blue, 5 violet, 13 pink
+for p in 0:08080a 1:f87171 2:4ade80 3:facc15 4:60a5fa 5:c084fc 6:b9f5d0 7:f4f4f2 \
+         8:8a8a96 9:fb923c 10:4ade80 11:fde68a 12:93c5fd 13:f472b6 14:22d3ee 15:f4f4f2; do
+    setpal "${p%%:*}" "${p#*:}"
+done
+
+# --- Logo -------------------------------------------------------------------
+
+logo=(
+    "###.......###...###.......###...#####.....###.....#########.......#########.....#########"
+    "###.......###...###.......###...#####.....###....###########.....###########....#########"
+    "###.......###...###.......###...######....###...###.......###...###.......###......###..."
+    "###.......###...###.......###...######....###...###.......###...###.......###......###..."
+    ".###.....###....###.......###...###.###...###...###.......###...###................###..."
+    "..#########.....###.......###...###.###...###...###.......###...###................###..."
+    "...#######......###.......###...###..###..###...###.......###...###................###..."
+    ".....###........###.......###...###..###..###...###.......###...###....######......###..."
+    ".....###........###.......###...###...###.###...#############...###....######......###..."
+    ".....###........###.......###...###...###.###...#############...###.......###......###..."
+    ".....###........###.......###...###....######...###.......###...###.......###......###..."
+    ".....###........###.......###...###....######...###.......###...###.......###......###..."
+    ".....###........###.......###...###.....#####...###.......###...###.......###......###..."
+    ".....###........###.......###...###.....#####...###.......###...###.......###......###..."
+    ".....###.........###########....###......####...###.......###....###########....#########"
+    ".....###..........#########.....###......####...###.......###.....#########.....#########"
+)
+LW=${#logo[0]} LH=$(( ${#logo[@]} / 2 ))
+cols=$(tput cols) rows=$(tput lines)
+LX=$(( (cols - LW) / 2 + 1 ))
+CX=$LX
+pad=$(( CX - 1 ))
+for c in CHOOSE FILTER INPUT; do export "GUM_${c}_PADDING=0 0 0 $pad"; done
+# filter would otherwise take the whole screen and hide the logo
+export GUM_FILTER_HEIGHT=12
+# confirm adds one column of its own
+export GUM_CONFIRM_PADDING="0 0 0 $(( pad - 1 ))"
+
+# Draws the logo with its top at row $1; a light sweeps across at column $2 (-99: none)
+RAINBOW=(1 9 3 2 14 4 5 13) GREEN=0 SHIFT=0 REVEAL=9999
+fgc() { (( $1 < 8 )) && REPLY="3$1" || REPLY="9$(( $1 - 8 ))"; }
+draw_logo() {
+    local top=$1 sweep=$2 r x t b d s out base
+    for ((r = 0; r < LH; r++)); do
+        (( top + r < 1 )) && continue
+        out=$'\e['"$(( top + r ));${LX}H"
+        for ((x = 0; x < LW; x++)); do
+            # Columns right of REVEAL stay empty while the logo is drawn in
+            (( x > REVEAL )) && { out+=$'\e[0m '; continue; }
+            base=${RAINBOW[$(( (x * ${#RAINBOW[@]} / LW + SHIFT) % ${#RAINBOW[@]} ))]}; (( GREEN == 1 || (GREEN == 2 && x - sweep + r < 0) )) && base=2
+            d=$(( x - sweep + r )); t=0 b=0
+            if [ "${logo[2 * r]:x:1}" = "#" ]; then
+                t=$base; (( d >= 0 && d < 2 )) && t=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && t=6
+            fi
+            if [ "${logo[2 * r + 1]:x:1}" = "#" ]; then
+                b=$base; (( d >= 0 && d < 2 )) && b=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && b=6
+            fi
+            if (( t == 0 && b == 0 )); then s=$'\e[0m '
+            elif (( t == b || (t != 0 && b != 0 && b > 7) )); then fgc "$t"; s=$'\e[0;'"${REPLY}m█"
+            elif (( b == 0 )); then fgc "$t"; s=$'\e[0;'"${REPLY}m▀"
+            elif (( t == 0 )); then fgc "$b"; s=$'\e[0;'"${REPLY}m▄"
+            else fgc "$t"; s=$'\e['"${REPLY};4${b}m▀"; fi
+            out+=$s
+        done
+        printf '%s\e[0m' "$out"
+    done
+}
+
+# Question screens: the green logo stays at the top, the question below it
+TOP=2
+header() {
+    printf '\e[%d;1H\e[J' $(( TOP + LH ))
+    if [ -n "${1:-}" ]; then
+        printf '\e[%d;%dH\e[37m%s\e[0m\e[%d;1H' $(( TOP + LH + 2 )) "$CX" "$1" $(( TOP + LH + 4 ))
+    else
+        printf '\e[%d;1H' $(( TOP + LH + 2 ))
+    fi
+}
+
+fail() {
+    printf '\e[%d;1H\e[J\e[%d;%dH\e[?25h\e[31m%s\e[0m\n' $(( rows - 3 )) $(( rows - 3 )) "$CX" "$1"
+    exit 1
+}
+
+gib() { numfmt --to=iec --suffix=B "$1"; }
+
+# --- Welcome ----------------------------------------------------------------
+
+keyboards="English (US)|us|us
+Swedish|sv-latin1|se
+Danish|dk-latin1|dk
+German|de-latin1|de
+Norwegian|no-latin1|no
+Finnish|fi|fi
+English (UK)|uk|gb
+French|fr-latin1|fr
+Spanish|es|es"
+
+kb_name="English (US)" kb_console=us kb_xkb=us
+
+pick_keyboard() {
+    # Esc in the list keeps the current layout
+    kb_pick=$( { cut -d'|' -f1 <<<"$keyboards"; echo "Other…"; } | gum choose --header "Keyboard") || return 0
+    if [ "$kb_pick" = "Other…" ]; then
+        kb_console=$(localectl list-keymaps | gum filter --header "Keyboard" --placeholder "Type to search, e.g. sv-latin1") || return 0
+        kb_name=$kb_console
+        # Console keymap to X11 layout: the part before the first - or _, with the usual exceptions
+        kb_xkb=${kb_console%%[-_]*}
+        case $kb_xkb in sv) kb_xkb=se ;; uk) kb_xkb=gb ;; esac
+    else
+        kb_name=$kb_pick
+        kb_console=$(grep "^$kb_name|" <<<"$keyboards" | cut -d'|' -f2)
+        kb_xkb=$(grep "^$kb_name|" <<<"$keyboards" | cut -d'|' -f3)
+    fi
+    loadkeys "$kb_console"
+}
+
+# Welcome: logo, techBob, tagline, keys; Esc gives a shell
+welcome() {
+    local top=$(( (rows - LH - 10) / 2 )) sweep=-12 y k rest
+    (( top < 1 )) && top=1
+    center() { printf '\e[%d;%dH%s' "$1" $(( (cols - $2) / 2 + 1 )) "$3"; }
+    clear
+    # No echo: keys pressed while the logo is drawn would show up on screen
+    stty -echo
+    printf '\e[?25l'
+    center $(( top + LH + 1 )) 7 $'\e[97mtech\e[92mBob'
+    center $(( top + LH + 2 )) 26 $'\e[90mA lean Arch-based desktop.'
+    center $(( top + LH + 5 )) 29 $'\e[97mPress Return to start install'
+    center $(( top + LH + 6 )) 10 $'\e[90mEsc  shell\e[0m'
+    # The sweep crosses the logo again and again until a key
+    while :; do
+        draw_logo "$top" "$sweep"
+        sweep=$(( sweep + 2 )); (( sweep > LW + 60 )) && sweep=-12
+        IFS= read -rsn1 -t 0.03 k || continue
+        [ -z "$k" ] && break
+        if [ "$k" = $'\e' ]; then
+            rest=; IFS= read -rsn4 -t 0.02 rest || true
+            if [ -z "$rest" ]; then
+                stty echo; printf '\e[0m\e[?25h'; clear
+                echo "Run yunagi-install to start the installer again."
+                exit 0
+            fi
+        fi
+    done
+    # Clear all but the logo, glide it up to the top and let it turn green
+    printf '\e[%d;1H\e[J' $(( top + LH ))
+    for ((y = top; y >= TOP; y--)); do
+        draw_logo "$y" -99
+        printf '\e[%d;1H\e[2K' $(( y + LH ))
+        sleep 0.012
+    done
+    GREEN=2
+    for ((sweep = -12; sweep <= LW + 12; sweep += 3)); do draw_logo "$TOP" "$sweep"; sleep 0.01; done
+    GREEN=1
+    draw_logo "$TOP" -99
+    stty echo
+    printf '\e[?25h'
+}
+
+welcome
+
+# --- Network ----------------------------------------------------------------
+
+# The offline ISO carries every package; then the network is optional
+offline_repo=/opt/yunagi/repo
+choices=("Connect to Wi-Fi" "Try again")
+[ -d "$offline_repo" ] && choices+=("Install without network")
+choices+=("Quit")
+while ! ping -c1 -W3 archlinux.org >/dev/null 2>&1; do
+    header "No internet connection"
+    case $(printf '%s\n' "${choices[@]}" | gum choose --header "Ethernet connects by itself. For Wi-Fi:") in
+        "Install without network") break ;;
+        "Connect to Wi-Fi")
+            dev=$(iwctl device list | awk '/station/ { print $2; exit }')
+            [ -n "$dev" ] || fail "No Wi-Fi device found."
+            iwctl station "$dev" scan; sleep 3
+            ssid=$(iwctl station "$dev" get-networks | sed 's/\x1b\[[0-9;]*m//g' | awk 'NR > 4 && NF { sub(/^ *> */, ""); sub(/  +(psk|open|8021x).*/, ""); print }' |
+                gum filter --header "Network" --placeholder "Type to search")
+            pass=$(gum input --password --header "Password for $ssid")
+            iwctl --passphrase "$pass" station "$dev" connect "$ssid" || true
+            sleep 4 ;;
+        "Quit") exit 1 ;;
+    esac
+done
+
+# --- Questions --------------------------------------------------------------
+
+languages="English|en_US
+Svenska|sv_SE
+Dansk|da_DK
+Deutsch|de_DE
+Español|es_ES
+Français|fr_FR
+Italiano|it_IT
+Nederlands|nl_NL
+Norsk bokmål|nb_NO
+Polski|pl_PL
+Português|pt_PT
+Português (Brasil)|pt_BR
+Suomi|fi_FI"
+
+while :; do
+    header
+    lang_name=$(cut -d'|' -f1 <<<"$languages" | gum choose --header "Language")
+    lang=$(grep "^$lang_name|" <<<"$languages" | cut -d'|' -f2)
+
+    header
+    pick_keyboard
+
+    header
+    timezone=$(timedatectl list-timezones | gum filter --header "Timezone" --placeholder "Type a city, e.g. Stockholm")
+
+    header
+    while :; do
+        user=$(gum input --header "Username" --placeholder "lowercase, e.g. alex")
+        [[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && break
+        header "Use lowercase letters, digits, - or _."
+    done
+    header
+    while :; do
+        pass1=$(gum input --password --header "Password (for sudo and the disk encryption)")
+        pass2=$(gum input --password --header "Password again")
+        [ -n "$pass1" ] && [ "$pass1" = "$pass2" ] && break
+        header "The passwords did not match."
+    done
+    header
+    encrypt_name=$(printf 'Yes\nNo\n' | gum choose --header "Encrypt the disk? The password unlocks it at every start, then you are logged in") || encrypt_name=Yes
+    encrypt=${encrypt_name,,}
+    header
+    hostname=$(gum input --header "Hostname" --value "yunagi")
+    [[ $hostname =~ ^[a-zA-Z0-9-]{1,63}$ ]] || hostname=yunagi
+
+    header
+    desktop_name=$(printf '%s\n' "Yunagi    Hyprland with the Yunagi shell" \
+        "GNOME     GNOME with a lean set of apps" "Minimal   No desktop, only the network" |
+        gum choose --header "Desktop") || desktop_name=Yunagi
+    desktop_name=${desktop_name%% *}
+    desktop=${desktop_name,,}
+
+    header
+    stars=$(printf '%*s' ${#pass1} ''); stars=${stars// /•}
+    for row in "Language|$lang_name" "Keyboard|$kb_xkb" "Timezone|$timezone" "Username|$user" "Password|$stars" "Encryption|$encrypt_name" "Hostname|$hostname" "Desktop|$desktop_name"; do
+        printf '%*s\e[32m•\e[0m \e[90m%-11s\e[97m%s\e[0m\n' "$pad" "" "${row%%|*}" "${row#*|}"
+    done
+    echo
+    [ "$(printf 'Yes\nNo, change it\n' | gum choose --header "Does this look right?")" = Yes ] && break
+done
+
+# --- Disk -------------------------------------------------------------------
+
+partition_options() {
+    lsblk -J -b -p -o NAME,SIZE,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS "$disk" |
+        python3 -c '
+import json, sys
+efi_type = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+bios_type = "21686148-6449-6e6f-744e-656564454649"
+def walk(nodes):
+    for part in nodes:
+        yield part
+        yield from walk(part.get("children", []))
+for part in walk(json.load(sys.stdin)["blockdevices"]):
+    if part["type"] != "part" or any(part.get("mountpoints") or []):
+        continue
+    size = int(part["size"])
+    kind = (part.get("parttype") or "").lower()
+    if sys.argv[1] == "efi":
+        if kind != efi_type or size < 512 * 1024 ** 2:
+            continue
+    elif kind in (efi_type, bios_type) or size < 20 * 1024 ** 3:
+        continue
+    fs = part.get("fstype") or "unformatted"
+    name = part["name"]
+    print(f"{name} ({size / 1024 ** 3:.1f} GiB, {fs})")
+' "$1"
+}
+
+bootdisk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /run/archiso/bootmnt 2>/dev/null)" 2>/dev/null || true)
+while :; do
+    header
+    disks=$(lsblk -dpno NAME,SIZE,MODEL,TYPE | awk -v b="/dev/$bootdisk" '$NF == "disk" && $1 != b {
+        n = $1; s = $2; $1 = $2 = $NF = ""; sub(/^ +/, ""); sub(/ +$/, ""); print n " (" s ")" ($0 != "" ? " - " $0 : "") }')
+    [ -n "$disks" ] || fail "No disk found to install on."
+    disk=$(gum choose --header "Select install disk" <<<"$disks" | awk '{ print $1 }')
+
+    # Largest free area on the disk: start sector and size in sectors
+    read -r free_start free_sectors < <(sfdisk -F "$disk" 2>/dev/null |
+        awk '$1 ~ /^[0-9]+$/ && $3 > n { n = $3; s = $1 } END { print s + 0, n + 0 }')
+    free_bytes=$(( free_sectors * $(blockdev --getss "$disk") ))
+    modes="Erase the whole disk"
+    (( free_bytes >= 20 * 1024 ** 3 )) && modes+=$'\n'"Use free space ($(gib "$free_bytes"))"
+    modes+=$'\n'"Change partitions"$'\n'"Choose a different disk"
+    header
+    mode=$(gum choose --header "Install on $disk" <<<"$modes")
+    [[ $mode == Choose* ]] && continue
+
+    if [[ $mode == Change* ]]; then
+        cfdisk --color=never "$disk" || continue
+        udevadm settle
+        if [ ! -d /sys/firmware/efi ] &&
+            ! lsblk -nr -o PARTTYPE "$disk" | grep -qi '^21686148-6449-6e6f-744e-656564454649$'; then
+            header "Use GPT with a 1 MiB BIOS boot partition. Press Return to choose a disk again."
+            read -rsn1
+            continue
+        fi
+        roots=$(partition_options root)
+        efis=$(partition_options efi)
+        if [ -z "$roots" ] || [ -z "$efis" ]; then
+            header "Create root (20 GiB+) and EFI System (512 MiB+) partitions. Press Return to choose a disk again."
+            read -rsn1
+            continue
+        fi
+        header
+        root=$(gum choose --header "Root partition (will be erased)" <<<"$roots" | awk '{ print $1 }')
+        header
+        efi=$(gum choose --header "EFI partition (existing FAT32 is kept)" <<<"$efis" | awk '{ print $1 }')
+        efi_format=yes
+        [ "$(lsblk -ndo FSTYPE "$efi")" = vfat ] && efi_format=no
+        home=
+    fi
+
+    header
+    fs=$(printf 'ext4\nbtrfs\n' | gum choose --header "File system")
+    if [[ $mode == Change* ]]; then
+        action="Keep $efi (FAT32)"
+        [ "$efi_format" = yes ] && action="Format $efi as FAT32"
+        header "Format $root as $fs. $action. Other partitions are kept."
+        gum confirm "Install Yunagi on these partitions?" || continue
+    fi
+    break
+done
+apps=--apps
+
+# --- Progress (maze) ---------------------------------------------------------
+
+# A wide maze, new each install. The way from the bottom-left entrance to the
+# top-right exit draws itself in green as the install goes; light head, darker trail.
+MAZE=/tmp/yunagi-maze
+maze_new() {
+    awk -v rows="$rows" -v cols="$cols" -v out="$MAZE" 'BEGIN {
+        srand()
+        h = int(rows * 0.3); if (h < 6) h = 6
+        w = 2 * h; if (2 * w + 1 > cols - 4) w = int((cols - 5) / 2)
+        GW = 2 * w + 1; GH = 2 * h + 1
+        for (y = 0; y < GH; y++) for (x = 0; x < GW; x++) G[x, y] = 1
+        # Carve with a depth-first walk
+        sx[0] = 0; sy[0] = h - 1; sp = 1; V[0, h - 1] = 1; G[1, 2 * (h - 1) + 1] = 0
+        split("1 0 -1 0", DX); split("0 1 0 -1", DY)
+        while (sp > 0) {
+            cx = sx[sp - 1]; cy = sy[sp - 1]; nn = 0
+            for (d = 1; d <= 4; d++) {
+                nx = cx + DX[d]; ny = cy + DY[d]
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h && !V[nx, ny]) cand[++nn] = d
+            }
+            if (nn == 0) { sp--; continue }
+            d = cand[int(rand() * nn) + 1]; nx = cx + DX[d]; ny = cy + DY[d]
+            V[nx, ny] = 1
+            G[2 * cx + 1 + DX[d], 2 * cy + 1 + DY[d]] = 0; G[2 * nx + 1, 2 * ny + 1] = 0
+            sx[sp] = nx; sy[sp] = ny; sp++
+        }
+        # Way from entrance (bottom-left) to exit (top-right), breadth-first over the grid
+        ex = 1; ey = GH - 1; G[ex, ey] = 0
+        tx = GW - 2; ty = 0; G[tx, ty] = 0
+        qh = 0; qt = 0; QX[qt] = ex; QY[qt] = ey; qt++; S[ex, ey] = 1
+        split("1 0 -1 0", MX); split("0 1 0 -1", MY)
+        while (qh < qt) {
+            x = QX[qh]; y = QY[qh]; qh++
+            if (x == tx && y == ty) break
+            for (d = 1; d <= 4; d++) {
+                nx = x + MX[d]; ny = y + MY[d]
+                if (nx >= 0 && nx < GW && ny >= 0 && ny < GH && !G[nx, ny] && !S[nx, ny]) {
+                    S[nx, ny] = 1; PX[nx, ny] = x; PY[nx, ny] = y; QX[qt] = nx; QY[qt] = ny; qt++
+                }
+            }
+        }
+        n = 0; x = tx; y = ty
+        while (1) { RX[n] = x; RY[n] = y; n++; if (x == ex && y == ey) break; nx = PX[x, y]; y = PY[x, y]; x = nx }
+        printf "%d %d %d\n", GW, GH, n > out
+        for (y = 0; y < GH; y++) { line = ""; for (x = 0; x < GW; x++) line = line (G[x, y] ? "#" : "."); print line > out }
+        for (i = n - 1; i >= 0; i--) print RX[i], RY[i] > out
+    }'
+}
+
+maze() {
+    awk -v p="$1" -v cols="$cols" -v rows="$rows" 'function fg(c) { return c < 8 ? "3" c : "9" (c - 8) }
+        function cls(x, y) {
+            if (y >= GH) return 0
+            if ((x, y) in P) { i = P[x, y]; return i == k - 1 ? 6 : (k - 1 - i < 8 ? 2 : 3) }
+            return substr(R[y], x + 1, 1) == "#" ? 4 : 0
+        }
+        NR == 1 { GW = $1; GH = $2; n = $3; next }
+        NR <= GH + 1 { R[NR - 2] = $0; next }
+        { WX[NR - GH - 2] = $1; WY[NR - GH - 2] = $2 }
+        END {
+            k = int(p * n / 100); for (i = 0; i < k; i++) P[WX[i], WY[i]] = i
+            H = int((GH + 1) / 2); x0 = int((cols - GW) / 2) + 1; y0 = int((rows - H - 3) / 2) + 1
+            for (r = 0; r < H; r++) {
+                line = sprintf("\033[%d;%dH", y0 + r, x0)
+                for (x = 0; x < GW; x++) {
+                    t = cls(x, 2 * r); b = cls(x, 2 * r + 1)
+                    if (t == 0 && b == 0) s = "\033[0m "
+                    else if (t == b) s = "\033[0;" fg(t) "m█"
+                    else if (b == 0) s = "\033[0;" fg(t) "m▀"
+                    else if (t == 0) s = "\033[0;" fg(b) "m▄"
+                    else s = "\033[" fg(t) ";4" b "m▀"
+                    line = line s
+                }
+                printf "%s\033[0m", line
+            }
+            pct = p "%"
+            printf "\033[%d;1H\033[2K\033[%d;%dH\033[90m%s\033[0m", y0 + H + 1, y0 + H + 1, int((cols - length(pct)) / 2) + 1, pct
+        }' "$MAZE"
+}
+
+PCT=0
+progress_start() {
+    setpal 4 26262c; setpal 3 1f6b41
+    printf '\e[2J\e[?25l'
+    maze_new
+    maze 0
+}
+
+# run_step FROM TO COMMAND: runs COMMAND, moving the maze from FROM to TO percent.
+# The position follows pacman's "(n/N) installing" lines in the logs; otherwise it creeps.
+run_step() {
+    local lo=$1 hi=$2 cmd=$3 pid shown=-1 cur=$1 m n N t t0=$SECONDS
+    echo "== $cmd" >>"$log"
+    bash -c "$cmd" >>"$log" 2>&1 &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        m=$(tail -c 8000 "$log" /var/log/archinstall/install.log 2>/dev/null |
+            grep -aoE '\( *[0-9]+/[0-9]+\) (installing|upgrading|reinstalling)' | tail -1 | tr -dc '0-9/' || true)
+        if [ -n "$m" ]; then
+            n=${m%/*} N=${m#*/}
+            t=$(( lo + (hi - lo) * n / (N > 0 ? N : 1) ))
+            (( t > cur )) && cur=$t
+        elif (( cur < hi - 1 && RANDOM % 8 == 0 )); then
+            cur=$(( cur + 1 ))
+        fi
+        (( cur >= hi )) && cur=$(( hi - 1 ))
+        if (( cur != shown )); then maze "$cur"; shown=$cur; fi
+        sleep 0.2
+    done
+    wait "$pid" || return 1
+    echo "== done in $(( SECONDS - t0 ))s" >>"$log"
+    PCT=$hi; maze "$hi"
+}
+
+# --- Partitions -------------------------------------------------------------
+
+: >"$log"
+SECONDS=0
+progress_start
+if [[ $mode != Change* ]]; then
+    {
+        root_type=4f68bce3-e8cd-4db1-96e7-fbcaf984b709
+        layout=
+        # BIOS machines need a small BIOS boot partition for Limine on GPT
+        [ -d /sys/firmware/efi ] || layout+=$'size=1MiB, type=21686148-6449-6E6F-744E-656564454649, name="YUNAGI_BIOS"\n'
+        layout+=$'size=1GiB, type=U, name="YUNAGI_EFI"\n'
+        layout+="type=$root_type, name=\"YUNAGI_ROOT\""$'\n'
+        if [[ $mode == Erase* ]]; then
+            wipefs -af "$disk"
+            printf 'label: gpt\n%s' "$layout" | sfdisk --wipe always "$disk"
+        else
+            # The first new partition starts at the beginning of the free area
+            printf 'start=%s, %s' "$free_start" "$layout" | sfdisk --append "$disk"
+        fi
+        udevadm settle
+    } >>"$log" 2>&1 || fail "Partitioning failed, see $log"
+
+    part() { lsblk -pnro NAME,PARTLABEL "$disk" | awk -v l="$1" '$2 == l { n = $1 } END { print n }'; }
+    efi=$(part YUNAGI_EFI)
+    root=$(part YUNAGI_ROOT)
+    [ -n "$efi" ] && [ -n "$root" ] || fail "Could not find the new partitions, see $log"
+    efi_format=yes
+    home=
+fi
+
+# Encrypt the root with the user's password if chosen; it is unlocked at boot (Plymouth asks)
+if [ "$encrypt" = yes ]; then
+    {
+        printf '%s' "$pass1" | cryptsetup luksFormat --batch-mode --type luks2 --key-file=- "$root"
+        printf '%s' "$pass1" | cryptsetup open --key-file=- "$root" root
+    } >>"$log" 2>&1 || fail "Encrypting $root failed, see $log"
+    luks_uuid=$(cryptsetup luksUUID "$root")
+    root=/dev/mapper/root
+fi
+
+mkfs="mkfs.$fs"
+[ "$fs" = ext4 ] && mkfs="mkfs.ext4 -F -L yunagi" || mkfs="mkfs.btrfs -f -L yunagi"
+cmds="$mkfs '$root'"
+[ "$efi_format" = yes ] && cmds="$cmds && mkfs.fat -F32 -n YUNAGI_EFI '$efi'"
+[ -n "$home" ] && [ "${home_format:-no}" = yes ] && cmds="$cmds && mkfs.ext4 -F -L home '$home'"
+run_step 0 4 "$cmds" ||
+    fail "Formatting failed, see $log"
+{ echo "root=$root efi=$efi home=$home"; lsblk -f "$disk"; } >>"$log" 2>&1
+mount "$root" "$mnt" >>"$log" 2>&1 || fail "Could not mount $root, see $log"
+mount --mkdir -t vfat -o umask=0077 "$efi" "$mnt/boot" >>"$log" 2>&1 || fail "Could not mount $efi, see $log"
+if [ -n "$home" ]; then
+    mount --mkdir "$home" "$mnt/home" >>"$log" 2>&1 || fail "Could not mount $home, see $log"
+fi
+
+# --- Base system ------------------------------------------------------------
+
+cfg=$(mktemp -d)
+python3 - "$cfg" "$hostname" "$timezone" "$kb_console" "$lang" <<'EOF'
+import json, sys
+d, hostname, tz, kb, lang = sys.argv[1:]
+json.dump({
+    "archinstall-language": "English",
+    "audio_config": {"audio": "pipewire"},
+    "bootloader_config": {"bootloader": "No bootloader", "uki": False, "removable": False},
+    "disk_config": {"config_type": "pre_mounted_config", "mountpoint": "/mnt"},
+    "hostname": hostname,
+    "kernels": ["linux"],
+    "locale_config": {"kb_layout": kb, "sys_enc": "UTF-8", "sys_lang": lang},
+    "network_config": {"type": "nm"},
+    "ntp": True,
+    "packages": [],
+    "pacman_config": {"color": True, "parallel_downloads": 10},
+    "profile_config": {"profile": {"main": "Minimal"}},
+    "swap": {"enabled": True, "algorithm": "zstd"},
+    "timezone": tz,
+}, open(f"{d}/config.json", "w"))
+EOF
+YUNAGI_USER=$user YUNAGI_PASS=$pass1 python3 - "$cfg" <<'EOF'
+import json, os, sys
+json.dump({"users": [{"username": os.environ["YUNAGI_USER"], "!password": os.environ["YUNAGI_PASS"], "sudo": True}]},
+          open(f"{sys.argv[1]}/creds.json", "w"))
+EOF
+chmod 600 "$cfg/creds.json"
+
+# Offline ISO: install from the local repository (packages were checked when the ISO was built)
+ai_flags=
+if [ -d "$offline_repo" ]; then
+    siglevel=$(grep -m1 '^SigLevel' /etc/pacman.conf)
+    mirrors=$(cat /etc/pacman.d/mirrorlist)
+    echo "Server = file://$offline_repo" >/etc/pacman.d/mirrorlist
+    sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+    pacman -Sy >>"$log" 2>&1 || fail "Could not read the packages on the ISO, see $log"
+    ai_flags="--offline --skip-ntp --skip-wkd"
+fi
+
+run_step 4 70 "archinstall --config '$cfg/config.json' --creds '$cfg/creds.json' --silent --skip-boot $ai_flags" ||
+    fail "The base system failed to install, see $log"
+rm -rf "$cfg"
+
+# The installed system sees the local repository too, until Yunagi is in place
+if [ -d "$offline_repo" ]; then
+    mkdir -p "$mnt$offline_repo"
+    mount --bind "$offline_repo" "$mnt$offline_repo"
+fi
+
+# --- Boot loader ------------------------------------------------------------
+
+# Limine is installed here, not by archinstall, which cannot find an encrypted root
+if [ "$encrypt" = yes ]; then
+    install -Dm644 "$src/boot/encrypt.conf" "$mnt/etc/mkinitcpio.conf.d/yunagi-encrypt.conf"
+    boot_args="cryptdevice=UUID=$luks_uuid:root rd.luks.name=$luks_uuid=root root=/dev/mapper/root"
+else
+    boot_args="root=UUID=$(blkid -s UUID -o value "$root")"
+fi
+boot_args+=" rw rootfstype=$fs zswap.enabled=0"
+# The initramfs is built once at the end: until then pacman's mkinitcpio hook is off
+mkdir -p "$mnt/etc/pacman.d/hooks"
+ln -sf /dev/null "$mnt/etc/pacman.d/hooks/90-mkinitcpio-install.hook"
+run_step 70 72 "arch-chroot '$mnt' pacman -S --noconfirm --needed limine efibootmgr" ||
+    fail "Could not install the boot loader, see $log"
+{
+    if [ -d /sys/firmware/efi ]; then
+        # Own entry plus the fallback path, which firmware without a saved entry boots
+        install -Dm644 "$mnt/usr/share/limine/BOOTX64.EFI" "$mnt/boot/EFI/limine/BOOTX64.EFI"
+        install -Dm644 "$mnt/usr/share/limine/BOOTX64.EFI" "$mnt/boot/EFI/BOOT/BOOTX64.EFI"
+        efibootmgr --create --disk "/dev/$(lsblk -no PKNAME "$efi")" --part "$(cat "/sys/class/block/$(basename "$efi")/partition")" \
+            --label Yunagi --loader '\EFI\limine\BOOTX64.EFI' --unicode
+        limine_update="cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/ && cp /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/"
+    else
+        install -Dm644 "$mnt/usr/share/limine/limine-bios.sys" "$mnt/boot/limine/limine-bios.sys"
+        arch-chroot "$mnt" limine bios-install "$disk"
+        limine_update="limine bios-install $disk && cp /usr/share/limine/limine-bios.sys /boot/limine/"
+    fi
+    # Keep the installed Limine in step with the package
+    mkdir -p "$mnt/etc/pacman.d/hooks"
+    printf '[Trigger]\nOperation = Install\nOperation = Upgrade\nType = Package\nTarget = limine\n\n[Action]\nDescription = Deploying Limine after upgrade...\nWhen = PostTransaction\nExec = /bin/sh -c "%s"\n' \
+        "$limine_update" >"$mnt/etc/pacman.d/hooks/99-limine.hook"
+    entry() { printf '/%s\n    protocol: linux\n    path: boot():/vmlinuz-linux\n    cmdline: %s\n    module_path: boot():/%s\n\n' "$@"; }
+    {
+        printf 'timeout: 5\n\n'
+        entry Yunagi "$boot_args" initramfs-linux.img
+        [ -f "$mnt/boot/initramfs-linux-fallback.img" ] && entry "Yunagi (fallback)" "$boot_args" initramfs-linux-fallback.img
+    } >"$mnt/boot/limine.conf"
+    cat "$mnt/boot/limine.conf"
+} >>"$log" 2>&1 || fail "Could not install the boot loader, see $log"
+
+# --- Yunagi -------------------------------------------------------------------
+
+mkdir -p "$mnt/home/$user/.local/share"
+cp -r "$src" "$mnt/home/$user/.local/share/yunagi"
+arch-chroot "$mnt" chown -R "$user:$user" "/home/$user/.local"
+run_step 72 96 "arch-chroot '$mnt' env YUNAGI_DEFER_INITRAMFS=1 bash '/home/$user/.local/share/yunagi/install.sh' --user '$user' --desktop $desktop $apps --keyboard '$kb_xkb'" ||
+    fail "The $desktop_name install failed, see $log"
+# One initramfs build with everything in place (Plymouth, unlocking)
+rm -f "$mnt/etc/pacman.d/hooks/90-mkinitcpio-install.hook"
+run_step 96 100 "arch-chroot '$mnt' mkinitcpio -P" || fail "Could not build the initramfs, see $log"
+# Back to the normal mirrors and signature checks on the installed system
+if [ -d "$offline_repo" ]; then
+    printf '%s\n' "$mirrors" >"$mnt/etc/pacman.d/mirrorlist"
+    sed -i "s/^SigLevel = Never/$siglevel/" "$mnt/etc/pacman.conf"
+    umount "$mnt$offline_repo" && rmdir "$mnt$offline_repo" "$mnt/opt/yunagi" || true
+fi
+cp "$log" "$mnt/var/log/yunagi-install.log"
+
+# --- Done -------------------------------------------------------------------
+
+# The welcome logo; the colours flow and the sweep runs until Return
+done_screen() {
+    local top=$(( (rows - LH - 7) / 2 )) sweep=-12 f=0 k
+    local t="Installed $desktop_name in $(( SECONDS / 60 ))m $(( SECONDS % 60 ))s"
+    local m="You can now remove the install medium"
+    local b="  Reboot Now  "
+    # The progress maze borrowed slots 3 and 4; give the rainbow its yellow and blue back
+    setpal 3 facc15; setpal 4 60a5fa
+    GREEN=0
+    stty -echo
+    printf '\e[2J\e[?25l'
+    # Draw the logo in from the left, then the text and the button
+    for ((REVEAL = 0; REVEAL <= LW; REVEAL += 2)); do draw_logo "$top" -99; sleep 0.015; done
+    REVEAL=9999
+    printf '\e[%d;%dH\e[97m%s' $(( top + LH + 2 )) $(( (cols - ${#t}) / 2 + 1 )) "$t"
+    printf '\e[%d;%dH\e[90m%s' $(( top + LH + 4 )) $(( (cols - ${#m}) / 2 + 1 )) "$m"
+    printf '\e[%d;%dH\e[42;30m%s\e[0m' $(( top + LH + 7 )) $(( (cols - ${#b}) / 2 + 1 )) "$b"
+    # The colours flow and the sweep runs until Return
+    while :; do
+        SHIFT=$(( f / 8 % ${#RAINBOW[@]} ))
+        draw_logo "$top" "$sweep"
+        sweep=$(( sweep + 2 )); (( sweep > LW + 40 )) && sweep=-12
+        f=$(( f + 1 ))
+        IFS= read -rsn1 -t 0.03 k || continue
+        [ -z "$k" ] && break
+    done
+    stty echo
+    printf '\e[0m\e[?25h'
+}
+done_screen
+umount -R "$mnt"
+reboot

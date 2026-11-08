@@ -1,0 +1,5 @@
+#!/bin/sh
+# yunagi-ddc-set BUS VALUE — set DDC/CI brightness (VCP 0x10).
+b=$1 v=$2
+i2ctransfer -y "$b" w7@0x37 0x51 0x84 0x03 0x10 $((v >> 8)) $((v & 255)) \
+    $((0x6e ^ 0x51 ^ 0x84 ^ 0x03 ^ 0x10 ^ (v >> 8) ^ (v & 255)))

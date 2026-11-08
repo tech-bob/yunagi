@@ -1,0 +1,83 @@
+# GNOME defaults for every user (dconf system database "local").
+# install.sh appends the keyboard layout. Users can change all of it.
+
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+gtk-theme='adw-gtk3-dark'
+icon-theme='Papirus-Dark'
+accent-color='teal'
+show-battery-percentage=true
+text-scaling-factor=1.03
+
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/yunagi/jonatan-pie-h8nxGssjQXs-unsplash.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/yunagi/jonatan-pie-h8nxGssjQXs-unsplash.jpg'
+picture-options='zoom'
+
+[org/gnome/desktop/screensaver]
+picture-uri='file:///usr/share/backgrounds/yunagi/jonatan-pie-h8nxGssjQXs-unsplash.jpg'
+
+[org/gnome/desktop/peripherals/keyboard]
+numlock-state=true
+
+[org/gnome/desktop/peripherals/mouse]
+accel-profile='flat'
+
+[org/gnome/desktop/peripherals/touchpad]
+accel-profile='flat'
+two-finger-scrolling-enabled=true
+
+[org/gnome/desktop/session]
+idle-delay=uint32 900
+
+[org/gnome/settings-daemon/plugins/color]
+night-light-enabled=true
+night-light-schedule-automatic=false
+night-light-schedule-from=19.0
+night-light-schedule-to=8.0
+
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='suspend'
+sleep-inactive-ac-timeout=7200
+sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-timeout=1800
+
+[org/gnome/shell]
+enabled-extensions=['appindicatorsupport@rgcjonas.gmail.com', 'caffeine@patapon.info']
+favorite-apps=['kitty.desktop', 'org.gnome.Nautilus.desktop', 'firefox.desktop']
+
+# Keys
+[org/gnome/desktop/wm/keybindings]
+close=['<Super>c']
+show-desktop=['<Super>d']
+switch-to-workspace-1=['<Super>1']
+switch-to-workspace-2=['<Super>2']
+switch-to-workspace-3=['<Super>3']
+switch-to-workspace-4=['<Super>4']
+move-to-workspace-1=['<Shift><Super>1']
+move-to-workspace-2=['<Shift><Super>2']
+move-to-workspace-3=['<Shift><Super>3']
+move-to-workspace-4=['<Shift><Super>4']
+
+# Super+1–4 switch workspaces, not dock apps
+[org/gnome/shell/keybindings]
+switch-to-application-1=@as []
+switch-to-application-2=@as []
+switch-to-application-3=@as []
+switch-to-application-4=@as []
+
+[org/gnome/settings-daemon/plugins/media-keys]
+control-center=['<Super>i']
+home=['<Super>e']
+www=['<Super>w']
+search=['<Super>r']
+reboot=['<Control><Super>r']
+next=['<Alt>n']
+play=['<Alt>p']
+previous=['<Alt>b']
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/terminal/']
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/terminal]
+name='Terminal'
+command='kitty'
+binding='<Super>Return'

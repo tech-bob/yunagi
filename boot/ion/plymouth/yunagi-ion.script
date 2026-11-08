@@ -1,0 +1,128 @@
+# Ion: the wordmark in the middle with a light orbiting it, on a plain dark ground.
+# The disk password goes in a field below it; after that a bar shows the start-up.
+Window.SetBackgroundTopColor(0.031, 0.035, 0.055);
+Window.SetBackgroundBottomColor(0.031, 0.035, 0.055);
+
+orbit = Sprite();
+dot = Sprite();
+wordmark = Sprite();
+field = Sprite();
+entry = Sprite();
+caption = Sprite();
+track = Sprite();
+fill = Sprite();
+hint = Sprite();
+phase = 0;
+# Only start-up gets the orbit; shutdown and reboot show the name alone
+booting = Plymouth.GetMode() == "boot";
+state = "normal";
+unlocked = 0;
+since = 0;
+progress = 0;
+
+fun centre_text(sprite, text, y, r, g, b) {
+    image = Image.Text(text, r, g, b);
+    sprite.SetImage(image);
+    sprite.SetPosition(Window.GetX() + (Window.GetWidth() - image.GetWidth()) / 2, y, 10);
+}
+
+# Text inside the field, from its left edge
+fun field_text(text, r, g, b) {
+    image = Image.Text(text, r, g, b);
+    entry.SetImage(image);
+    entry.SetPosition(cx - 190 * scale, fy + (56 * scale - image.GetHeight()) / 2, 11);
+    entry.SetOpacity(1);
+}
+
+fun layout() {
+    global.width = Window.GetWidth();
+    global.height = Window.GetHeight();
+    global.scale = Math.Min(width / 1920, height / 1080);
+    global.cx = Window.GetX() + width / 2;
+    global.cy = Window.GetY() + height * 0.48;
+    global.fy = cy + 200 * scale;
+    wordmark.SetImage(Image("wordmark.png").Scale(470 * scale, 140 * scale));
+    wordmark.SetPosition(cx - 235 * scale, cy - 70 * scale, 1);
+    orbit.SetImage(Image("orbit.png").Scale(680 * scale, 300 * scale));
+    orbit.SetPosition(cx - 340 * scale, cy - 150 * scale, 0);
+    if (booting) orbit.SetOpacity(0.8); else orbit.SetOpacity(0);
+    dot.SetImage(Image("dot.png").Scale(36 * scale, 36 * scale));
+    field.SetImage(Image("field.png").Scale(420 * scale, 56 * scale));
+    field.SetPosition(cx - 210 * scale, fy, 10);
+    track.SetImage(Image("track.png").Scale(240 * scale, Math.Max(2, 4 * scale)));
+    track.SetPosition(cx - 120 * scale, fy + 26 * scale, 10);
+    centre_text(hint, "Esc for details", Window.GetY() + height * 0.92, 0.42, 0.41, 0.48);
+}
+
+fun refresh() {
+    if (width != Window.GetWidth() || height != Window.GetHeight()) layout();
+    global.phase += 0.025;
+    # Point on the orbit (a=300, b=90, tilted -10 degrees); behind the name on the far side
+    a = Math.Cos(phase) * 300; b = Math.Sin(phase) * 90;
+    x = a * 0.985 + b * 0.174;
+    y = b * 0.985 - a * 0.174;
+    dot.SetPosition(cx + x * scale - 18 * scale, cy + y * scale - 18 * scale, 2);
+    if (!booting) dot.SetOpacity(0);
+    else if (Math.Sin(phase) < 0) { dot.SetZ(0); dot.SetOpacity(0.5); }
+    else { dot.SetZ(2); dot.SetOpacity(1); }
+    # The bar follows Plymouth's estimate, and creeps on by itself if that stalls
+    if (unlocked && state == "normal") {
+        global.since += 1;
+        shown = Math.Max(progress, 0.9 * since / (since + 400));
+        fill.SetImage(Image("pulse.png").Scale(Math.Max(1, 240 * scale * shown), Math.Max(2, 4 * scale)));
+        fill.SetPosition(cx - 120 * scale, fy + 26 * scale, 11);
+    }
+}
+
+fun boot_progress(duration, value) { global.progress = value; }
+
+fun normal() {
+    if (state == "prompt") global.unlocked = 1;
+    global.state = "normal";
+    field.SetOpacity(0);
+    entry.SetOpacity(0);
+    caption.SetOpacity(0);
+    if (unlocked) { track.SetOpacity(1); fill.SetOpacity(1); }
+    else { track.SetOpacity(0); fill.SetOpacity(0); }
+}
+
+fun password(text, count) {
+    global.state = "prompt";
+    track.SetOpacity(0);
+    fill.SetOpacity(0);
+    caption.SetOpacity(0);
+    field.SetOpacity(1);
+    if (count == 0) field_text("Password", 0.54, 0.54, 0.59);
+    else {
+        bullets = "";
+        # Cap the dots so a long passphrase stays inside the field
+        for (i = 0; i < Math.Min(count, 28); i++) bullets += "•";
+        field_text(bullets, 0.85, 0.84, 0.90);
+    }
+}
+
+fun question(text, value) {
+    global.state = "prompt";
+    track.SetOpacity(0);
+    fill.SetOpacity(0);
+    caption.SetOpacity(1);
+    centre_text(caption, text, fy - 40 * scale, 0.85, 0.84, 0.90);
+    field.SetOpacity(1);
+    field_text(value, 0.85, 0.84, 0.90);
+}
+
+fun message(text) {
+    caption.SetOpacity(1);
+    centre_text(caption, text, fy + 80 * scale, 0.85, 0.84, 0.90);
+}
+fun hide_message(text) { caption.SetOpacity(0); }
+
+layout();
+normal();
+Plymouth.SetRefreshFunction(refresh);
+Plymouth.SetBootProgressFunction(boot_progress);
+Plymouth.SetDisplayNormalFunction(normal);
+Plymouth.SetDisplayPasswordFunction(password);
+Plymouth.SetDisplayQuestionFunction(question);
+Plymouth.SetDisplayMessageFunction(message);
+Plymouth.SetHideMessageFunction(hide_message);
