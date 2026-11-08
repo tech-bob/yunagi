@@ -118,5 +118,4 @@ MIT, see `LICENSE`.
 
 ## Credits
 
-The style is inspired by [Pond](https://github.com/bflycomputer/pond-interface)
-by Butterfly (BSD-3). Wallpapers from Unsplash: Jonatan Pie, Randy Tarampi.
+Wallpapers from Unsplash: Jonatan Pie, Randy Tarampi.
