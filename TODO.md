@@ -1,6 +1,7 @@
 # Toward 1.0
 
 - **Limine:** a new theme; the current Ion menu does not look right.
+- **Plymouth:** a new start-up screen.
 - **btrfs and snapshots:** btrfs by default with subvolumes (`@`, `@home`, `@log`,
   `@pkg`), snapper and snap-pac for a snapshot before and after every pacman run,
   and snapshots as Limine boot entries (our own, since `limine-snapper-sync` is

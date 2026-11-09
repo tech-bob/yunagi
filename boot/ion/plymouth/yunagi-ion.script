@@ -96,7 +96,7 @@ fun password(text, count) {
     else {
         bullets = "";
         # Cap the dots so a long passphrase stays inside the field
-        for (i = 0; i < Math.Min(count, 28); i++) bullets += "•";
+        for (i = 0; i < Math.Min(count, 28); i++) bullets += "*";
         field_text(bullets, 0.85, 0.84, 0.90);
     }
 }

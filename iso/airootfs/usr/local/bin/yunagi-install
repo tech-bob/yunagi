@@ -61,24 +61,25 @@ export GUM_FILTER_HEIGHT=12
 # confirm adds one column of its own
 export GUM_CONFIRM_PADDING="0 0 0 $(( pad - 1 ))"
 
-# Draws the logo with its top at row $1; a light sweeps across at column $2 (-99: none)
-RAINBOW=(1 9 3 2 14 4 5 13) GREEN=0 SHIFT=0 REVEAL=9999
+# Draws the logo with its top at row $1; a light sweeps across at column $2 (-99: none).
+# A pixel shows once REVEAL reaches its APPEAR time, and flashes white just after.
+RAINBOW=(1 9 3 2 14 4 5 13) GREEN=0 SHIFT=0 REVEAL=9999 APPEAR=()
 fgc() { (( $1 < 8 )) && REPLY="3$1" || REPLY="9$(( $1 - 8 ))"; }
 draw_logo() {
-    local top=$1 sweep=$2 r x t b d s out base
+    local top=$1 sweep=$2 r x t b d s out base i
     for ((r = 0; r < LH; r++)); do
         (( top + r < 1 )) && continue
         out=$'\e['"$(( top + r ));${LX}H"
         for ((x = 0; x < LW; x++)); do
-            # Columns right of REVEAL stay empty while the logo is drawn in
-            (( x > REVEAL )) && { out+=$'\e[0m '; continue; }
             base=${RAINBOW[$(( (x * ${#RAINBOW[@]} / LW + SHIFT) % ${#RAINBOW[@]} ))]}; (( GREEN == 1 || (GREEN == 2 && x - sweep + r < 0) )) && base=2
             d=$(( x - sweep + r )); t=0 b=0
-            if [ "${logo[2 * r]:x:1}" = "#" ]; then
-                t=$base; (( d >= 0 && d < 2 )) && t=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && t=6
+            i=$(( 2 * r * LW + x ))
+            if [ "${logo[2 * r]:x:1}" = "#" ] && (( APPEAR[i] <= REVEAL )); then
+                t=$base; (( d >= 0 && d < 2 || REVEAL - APPEAR[i] < 3 )) && t=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && t=6
             fi
-            if [ "${logo[2 * r + 1]:x:1}" = "#" ]; then
-                b=$base; (( d >= 0 && d < 2 )) && b=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && b=6
+            i=$(( i + LW ))
+            if [ "${logo[2 * r + 1]:x:1}" = "#" ] && (( APPEAR[i] <= REVEAL )); then
+                b=$base; (( d >= 0 && d < 2 || REVEAL - APPEAR[i] < 3 )) && b=7; (( (d >= -2 && d < 0) || (d >= 2 && d < 4) )) && b=6
             fi
             if (( t == 0 && b == 0 )); then s=$'\e[0m '
             elif (( t == b || (t != 0 && b != 0 && b > 7) )); then fgc "$t"; s=$'\e[0;'"${REPLY}m█"
@@ -275,7 +276,7 @@ done
 # --- Disk -------------------------------------------------------------------
 
 partition_options() {
-    lsblk -J -b -p -o NAME,SIZE,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS "$disk" |
+    lsblk -J -b -p -o NAME,SIZE,TYPE,FSTYPE,PARTTYPE,MOUNTPOINTS,LABEL,PARTLABEL "$disk" |
         python3 -c '
 import json, sys
 efi_type = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
@@ -296,7 +297,8 @@ for part in walk(json.load(sys.stdin)["blockdevices"]):
         continue
     fs = part.get("fstype") or "unformatted"
     name = part["name"]
-    print(f"{name} ({size / 1024 ** 3:.1f} GiB, {fs})")
+    label = part.get("label") or part.get("partlabel")
+    print(f"{name} ({size / 1024 ** 3:.1f} GiB, {fs}" + (f", {label}" if label else "") + ")")
 ' "$1"
 }
 
@@ -314,14 +316,24 @@ while :; do
     free_bytes=$(( free_sectors * $(blockdev --getss "$disk") ))
     modes="Erase the whole disk"
     (( free_bytes >= 20 * 1024 ** 3 )) && modes+=$'\n'"Use free space ($(gib "$free_bytes"))"
-    modes+=$'\n'"Change partitions"$'\n'"Choose a different disk"
+    [ -n "$(partition_options root)" ] && [ -n "$(partition_options efi)" ] && modes+=$'\n'"Use existing partitions"
+    modes+=$'\n'"Edit partitions (cfdisk)"$'\n'"Choose a different disk"
+    # What is on the disk now, so the choice is an informed one
+    table=$(lsblk -lno NAME,SIZE,FSTYPE,LABEL "$disk" | tail -n +2 | sed 's/^/  /')
+    [ -n "$table" ] || table="  (no partitions)"
     header
-    mode=$(gum choose --header "Install on $disk" <<<"$modes")
+    mode=$(gum choose --header "Install on $disk"$'\n\n'"$table"$'\n' <<<"$modes")
     [[ $mode == Choose* ]] && continue
 
-    if [[ $mode == Change* ]]; then
+    if [[ $mode == Edit* ]]; then
         cfdisk --color=never "$disk" || continue
         udevadm settle
+        mode=Change
+    fi
+    if [[ $mode == "Use existing partitions" ]]; then
+        mode=Change
+    fi
+    if [[ $mode == Change* ]]; then
         if [ ! -d /sys/firmware/efi ] &&
             ! lsblk -nr -o PARTTYPE "$disk" | grep -qi '^21686148-6449-6e6f-744e-656564454649$'; then
             header "Use GPT with a 1 MiB BIOS boot partition. Press Return to choose a disk again."
@@ -649,9 +661,10 @@ done_screen() {
     GREEN=0
     stty -echo
     printf '\e[2J\e[?25l'
-    # Draw the logo in from the left, then the text and the button
-    for ((REVEAL = 0; REVEAL <= LW; REVEAL += 2)); do draw_logo "$top" -99; sleep 0.015; done
-    REVEAL=9999
+    # Draw the logo in pixel by pixel, left to right with scatter, then the text and the button
+    for ((i = 0; i < 2 * LH * LW; i++)); do APPEAR[i]=$(( i % LW + RANDOM % 24 )); done
+    for ((REVEAL = 0; REVEAL <= LW + 26; REVEAL += 2)); do draw_logo "$top" -99; done
+    REVEAL=9999 APPEAR=()
     printf '\e[%d;%dH\e[97m%s' $(( top + LH + 2 )) $(( (cols - ${#t}) / 2 + 1 )) "$t"
     printf '\e[%d;%dH\e[90m%s' $(( top + LH + 4 )) $(( (cols - ${#m}) / 2 + 1 )) "$m"
     printf '\e[%d;%dH\e[42;30m%s\e[0m' $(( top + LH + 7 )) $(( (cols - ${#b}) / 2 + 1 )) "$b"
