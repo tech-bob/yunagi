@@ -62,7 +62,8 @@ Scope {
             { label: "Hyprsunset", icon: "\uf043", file: ".config/hypr/hyprsunset.conf" },
             { label: "Kitty", icon: "\uf120", file: ".config/kitty/kitty.conf" },
             { label: "Fish", icon: "\uf489", file: ".config/fish/config.fish" },
-            { label: "Neovim", icon: "\ue62b", file: ".config/nvim/init.lua" }
+            { label: "Neovim", icon: "\ue62b", file: ".config/nvim/init.lua" },
+            { label: "Firewall", detail: "nftables; asks for your password", icon: "\uf132", system: "/etc/nftables.conf" }
         ];
         if (page === "screen") return [
             { label: "Screensaver", key: "screensaver_enabled", kind: "toggle", value: settings.screensaver_enabled ? "On" : "Off" },
@@ -194,6 +195,9 @@ Scope {
         } else {
             open = false;
             if (row.preview) Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-screensaver"]);
+            // System file: edited as root, then the firewall reloads; an error stays on screen
+            else if (row.system) Quickshell.execDetached(["kitty", "-e", "sh", "-c",
+                'SUDO_EDITOR=nvim sudoedit "$1" && sudo systemctl restart nftables || { echo; read -r -p "Press Return to close" _; }', "sh", row.system]);
             else if (row.file) Quickshell.execDetached(["kitty", "-e", "nvim", Quickshell.env("HOME") + "/" + row.file]);
             else if (row.packages) Quickshell.execDetached(["kitty", "--class", "yunagi-pkg", "-o", "confirm_os_window_close=0", "-e", "yunagi-pkg"]);
             else Quickshell.execDetached(["qs", "ipc", "call", row.target, "toggle"]);

@@ -53,12 +53,23 @@ case $desktop in yunagi|gnome|minimal) ;; *) echo "unknown desktop: $desktop" >&
 pkgs() { grep -hv -e '^#' -e '^$' "$@" | as_root pacman -S --needed --noconfirm -; }
 svc_enable() { if [ "$chroot" = yes ]; then systemctl enable "$@"; else sudo systemctl enable --now "$@"; fi; }
 
-# --- Minimal: only the network -------------------------------------------------
+# Every desktop gets the firewall: nftables, incoming dropped except replies,
+# loopback and ping; outgoing open. An existing ruleset of your own is kept.
+firewall() {
+    # Replaces Arch's file or ours; a file edited by hand (pacman -Qkk flags it) stays
+    local f=/etc/nftables.conf
+    if [ ! -f $f ] || grep -q 'Yunagi firewall' $f || ! pacman -Qkk nftables 2>&1 | grep -q " $f "; then
+        as_root install -Dm644 default/nftables.conf $f
+    fi
+}
+
+# --- Minimal: only the network and the firewall ---------------------------------
 
 if [ "$desktop" = minimal ]; then
-    as_root pacman -S --needed --noconfirm networkmanager
-    svc_enable NetworkManager
-    echo "Done. Minimal install: no desktop, NetworkManager is on."
+    as_root pacman -S --needed --noconfirm networkmanager nftables
+    firewall
+    svc_enable NetworkManager nftables
+    echo "Done. Minimal install: no desktop, NetworkManager and the firewall are on."
     exit 0
 fi
 
@@ -78,7 +89,8 @@ pkgs "${lists[@]}"
 as_root python3 boot/configure.py
 [ "$(getent passwd "$user" | cut -d: -f7)" = /usr/bin/fish ] || as_root chsh -s /usr/bin/fish "$user"
 
-svc_enable NetworkManager bluetooth power-profiles-daemon
+firewall
+svc_enable NetworkManager bluetooth power-profiles-daemon nftables
 
 # SSH agent for every user: gcr-ssh-agent (part of gnome-keyring), keys unlocked through the keyring
 as_root systemctl --global enable gcr-ssh-agent.socket

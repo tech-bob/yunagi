@@ -245,10 +245,21 @@ Scope {
                                 visible: !focused
                                 text: wsId
                                 color: used ? Colors.text : Colors.textDim
-                                opacity: used ? 1 : 0.6
+                                opacity: used ? 1 : 0.4
                                 font.family: "Hack Nerd Font"
                                 font.pixelSize: 13
-                                font.weight: Font.DemiBold
+                                font.weight: used ? Font.Bold : Font.Normal
+                            }
+
+                            // Windows open: a short line in the accent colour under the number
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 3
+                                visible: used && !focused
+                                width: 10
+                                height: 2
+                                color: Colors.primary
                             }
 
                             Rectangle {

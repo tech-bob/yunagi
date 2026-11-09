@@ -14,5 +14,7 @@
 - **AI user:** an optional account for AI agents, chosen in the installer and
   kept apart from the admin: no sudo, a shared directory with the admin, and a
   set of agent tools. To be designed before it is built.
+- **Firewall tool:** open and close ports from a small TUI like the Packages
+  tool, instead of editing `/etc/nftables.conf`.
 - **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
   Danish).

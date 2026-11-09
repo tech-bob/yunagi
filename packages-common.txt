@@ -23,6 +23,7 @@ pipewire
 pipewire-pulse
 wireplumber
 networkmanager
+nftables
 bluez
 bluez-utils
 power-profiles-daemon

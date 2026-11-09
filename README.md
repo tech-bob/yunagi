@@ -121,6 +121,17 @@ for a new keyring: leave it empty and it stays unlocked from then on.
 The SSH agent is gcr-ssh-agent. Add keys with `ssh-add`, or `AddKeysToAgent yes`
 in `~/.ssh/config`.
 
+## Firewall
+
+nftables is on from the start: incoming connections are dropped except replies
+and ping, SSH included; outgoing traffic is open. Settings menu →
+System → Config → Firewall opens `/etc/nftables.conf` and reloads it after
+saving. To open a port, add a line to the `input` chain:
+
+```
+tcp dport 53317 accept
+```
+
 ## Wallpaper and profile picture
 
 Put the image in `~/Pictures/wallpapers`, point to it in
