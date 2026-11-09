@@ -70,7 +70,7 @@ def write(name, width, height, body):
 
 # Limine: plain dark ground, the mark small in the bottom-right corner
 write('limine', 1920, 1080, '<rect width="1920" height="1080" fill="#08090e"/>'
-      + diamond(1712, 872, 112, True) + diamond(1712, 872, 112))
+      + diamond(1680, 840, 144, True) + diamond(1680, 840, 144))
 write('plymouth/wordmark', 470, 140, WORD_CAPS)
 write('wordmark', 470, 140, WORD)
 for target in ('sddm/yunagi/wordmark.png', 'home/.config/hypr/lock/wordmark.png'):
