@@ -10,7 +10,6 @@ entry = Sprite();
 caption = Sprite();
 track = Sprite();
 fill = Sprite();
-hint = Sprite();
 phase = 0;
 # Only start-up (and the disk password) breathes; shutdown and reboot show the name alone
 booting = Plymouth.GetMode() == "boot";
@@ -48,14 +47,13 @@ fun layout() {
     field.SetPosition(cx - 210 * scale, fy, 10);
     track.SetImage(Image("track.png").Scale(240 * scale, Math.Max(2, 4 * scale)));
     track.SetPosition(cx - 120 * scale, fy + 26 * scale, 10);
-    centre_text(hint, "Esc for details", Window.GetY() + height * 0.92, 0.42, 0.41, 0.48);
 }
 
 fun refresh() {
     if (width != Window.GetWidth() || height != Window.GetHeight()) layout();
     # One breath about every four seconds (refresh runs at 50 Hz)
     global.phase += 0.032;
-    if (booting) glow.SetOpacity(0.15 + 0.75 * (0.5 - 0.5 * Math.Cos(phase)));
+    if (booting) glow.SetOpacity(0.2 + 0.8 * (0.5 - 0.5 * Math.Cos(phase)));
     else glow.SetOpacity(0);
     # The bar follows Plymouth's estimate, and creeps on by itself if that stalls
     if (unlocked && state == "normal") {

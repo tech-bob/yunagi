@@ -78,8 +78,11 @@ for target in ('sddm/yunagi/wordmark.png', 'home/.config/hypr/lock/wordmark.png'
 # Password field for the disk unlock prompt
 write('plymouth/field', 420, 56, '<rect x=".5" y=".5" width="419" height="55" rx="10" fill="#0e0e14" fill-opacity=".9" stroke="#2a2a35"/>')
 # Glow behind the wordmark, breathing at start-up: the wordmark blurred, 60 px of room on every side
+# Two layers: a tight bright one and a wide soft one
 write('plymouth/glow', 590, 260, '<filter id="breath" x="-30%" y="-60%" width="160%" height="220%">'
-      '<feGaussianBlur stdDeviation="16"/></filter>'
-      f'<g filter="url(#breath)"><g transform="translate(60 60)">{WORD_CAPS}</g></g>')
+      '<feGaussianBlur stdDeviation="12"/></filter>'
+      '<filter id="halo" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="26"/></filter>'
+      f'<g filter="url(#halo)"><g transform="translate(60 60)">{WORD_CAPS}</g></g>'
+      f'<g filter="url(#breath)"><g transform="translate(60 60)">{WORD_CAPS}{WORD_CAPS}</g></g>')
 write('plymouth/pulse', 64, 4, '<rect width="64" height="4" rx="2" fill="url(#ion)"/>')
 write('plymouth/track', 64, 4, '<rect width="64" height="4" rx="2" fill="#2c293b"/>')
