@@ -3,7 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 
-// Brightness (backlight or DDC), GTK text size and monitor scale.
+// Brightness (backlight or DDC), GTK text size, monitor scale and refresh rate.
 Scope {
     id: root
 
@@ -22,6 +22,9 @@ Scope {
 
     property real textFactor: 1.0
     property var monScale: ({})
+    property var monRate: ({})
+    // Refresh rates at each monitor's current resolution, one per whole Hz, highest first
+    property var monRates: ({})
     readonly property var textSteps: [9, 10, 11, 12, 13, 14, 16]
     readonly property var scaleSteps: [1, 1.25, 1.6, 2, 3, 4]
 
@@ -92,6 +95,14 @@ Scope {
         m[name] = s;
         monScale = m;
         Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale", name, String(s)]);
+    }
+
+    function setRate(name, r) {
+        const m = Object.assign({}, monRate);
+        m[name] = r;
+        monRate = m;
+        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale", name,
+                                 String(monScale[name] ?? 1), r.toFixed(2)]);
     }
 
     Process {
@@ -171,10 +182,22 @@ Scope {
             onStreamFinished: {
                 const nl = text.indexOf("\n");
                 root.textFactor = parseFloat(text.slice(0, nl)) || 1.0;
-                const m = {};
-                for (const mon of JSON.parse(text.slice(nl + 1)))
+                const m = {}, rate = {}, rates = {};
+                for (const mon of JSON.parse(text.slice(nl + 1))) {
                     m[mon.name] = mon.scale;
+                    rate[mon.name] = mon.refreshRate;
+                    const size = mon.width + "x" + mon.height + "@";
+                    const best = {};
+                    for (const mode of mon.availableModes)
+                        if (mode.startsWith(size)) {
+                            const hz = parseFloat(mode.slice(size.length));
+                            if (!(Math.round(hz) in best) || hz > best[Math.round(hz)]) best[Math.round(hz)] = hz;
+                        }
+                    rates[mon.name] = Object.values(best).sort((a, b) => b - a);
+                }
                 root.monScale = m;
+                root.monRate = rate;
+                root.monRates = rates;
             }
         }
     }
@@ -379,6 +402,54 @@ Scope {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: if (!parent.on) root.setScale(briCol.mon, modelData)
+                        }
+                    }
+                }
+            }
+
+            Divider { visible: rateRow.rates.length > 1 }
+
+            SectionHead {
+                visible: rateRow.rates.length > 1
+                label: "REFRESH RATE"
+                value: ""
+            }
+
+            Row {
+                id: rateRow
+                readonly property var rates: root.monRates[briCol.mon] ?? []
+                visible: rates.length > 1
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: rateRow.rates
+
+                    Rectangle {
+                        required property var modelData
+                        readonly property bool on: Math.round(root.monRate[briCol.mon] ?? 0) === Math.round(modelData)
+                        width: (briCol.width - 6 * (rateRow.rates.length - 1)) / rateRow.rates.length
+                        height: 32
+                        radius: 0
+                        color: on ? Colors.surfaceContainerHighest : (rtMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                        border.color: on ? Colors.primary : Colors.outlineVariant
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: Math.round(modelData)
+                            color: parent.on ? Colors.text : Colors.textDim
+                            font.family: "Hack Nerd Font"
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                        }
+
+                        MouseArea {
+                            id: rtMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (!parent.on) root.setRate(briCol.mon, modelData)
                         }
                     }
                 }

@@ -24,7 +24,7 @@ Scope {
     property string lookTitle: ""
     readonly property string helper: Quickshell.env("HOME") + "/.local/bin/yunagi-settings"
     readonly property string title: ({
-        root: "Settings", screen: "Screen & lock", devices: "Devices", config: "Config", look: "About mark",
+        root: "Yunagi", prefs: "Settings", screen: "Screen & lock", config: "Config", look: "About mark",
         keyboard: "Keyboard", mouse: "Mouse & touchpad", git: "Git", system: "System",
         choice: optionTitle, input: optionTitle, lookcolour: lookTitle
     })[page] || ""
@@ -35,16 +35,23 @@ Scope {
                                           ["Danish", "dk"], ["Finnish", "fi"], ["German", "de"], ["French", "fr"], ["Spanish", "es"]]
     readonly property var rateOptions: [["Slow · 20/s", 20], ["Normal · 25/s", 25], ["Fast · 35/s", 35], ["Faster · 50/s", 50]]
     readonly property var delayOptions: [["Short · 250 ms", 250], ["400 ms", 400], ["Long · 600 ms", 600]]
-    readonly property var sensOptions: [["Slowest", -0.6], ["Slow", -0.3], ["Normal", 0], ["Fast", 0.2], ["Faster", 0.4], ["Fastest", 0.7]]
+    // Slider being dragged: its key and value until release
+    property string dragKey: ""
+    property real dragValue: 0
+    onSettingsChanged: dragKey = ""
     readonly property var entries: {
         if (page === "root") return [
             { label: "Apps", detail: "Find and launch applications", icon: "\uf00a", target: "launcher" },
             { label: "Packages", detail: "Search, install and remove software", icon: "\uf187", packages: true },
-            { label: "Screen & lock", detail: "Screensaver, idle time and locking", icon: "\uf023", page: "screen" },
-            { label: "Devices", detail: "Audio, displays and connections", icon: "\uf108", page: "devices" },
-            { label: "System", detail: "Lock, power and system information", icon: "\uf013", page: "system" },
+            { label: "Settings", detail: "Screen, keyboard, mouse, git and look", icon: "\uf1de", page: "prefs" },
+            { label: "System", detail: "Devices, config files, lock and power", icon: "\uf013", page: "system" }
+        ];
+        if (page === "prefs") return [
+            { label: "Screen & lock", detail: "Screensaver, idle time, locking and night light", icon: "\uf023", page: "screen" },
+            { label: "Keyboard", detail: "Layout and key repeat", icon: "\uf11c", page: "keyboard" },
+            { label: "Mouse & touchpad", detail: "Speed, scrolling and tapping", icon: "\uf245", page: "mouse" },
             { label: "Git", detail: "Name and email for commits", icon: "\uf1d3", page: "git" },
-            { label: "Config", detail: "Edit configuration files", icon: "\uf121", page: "config" }
+            { label: "About mark", detail: "Mark and colours in System information", icon: "\uf53f", page: "look" }
         ];
         if (page === "config") return [
             { label: "Git", icon: "\uf1d3", file: ".gitconfig" },
@@ -72,7 +79,7 @@ Scope {
             { label: "Repeat delay", key: "repeat_delay", kind: "choice", options: delayOptions, value: optionLabel(delayOptions, settings.repeat_delay) }
         ];
         if (page === "mouse") return [
-            { label: "Pointer speed", key: "sensitivity", kind: "choice", options: sensOptions, value: optionLabel(sensOptions, settings.sensitivity) },
+            { label: "Pointer speed", detail: "0 is Hyprland's default", key: "sensitivity", kind: "slider", min: -1, max: 1, num: settings.sensitivity ?? 0 },
             { label: "Natural scrolling", detail: "Touchpad", key: "natural_scroll", kind: "toggle", value: settings.natural_scroll ? "On" : "Off" },
             { label: "Tap to click", detail: "Touchpad", key: "tap_to_click", kind: "toggle", value: settings.tap_to_click ? "On" : "Off" }
         ];
@@ -81,14 +88,7 @@ Scope {
             { label: "Email", key: "git_email", kind: "text", value: settings.git_email || "—" }
         ];
         if (page === "input") return [];
-        if (page === "devices") return [
-            { label: "Audio", icon: "\uf028", target: "audio" },
-            { label: "Display", icon: "\uf108", target: "brightness" },
-            { label: "Bluetooth", icon: "\uf293", target: "bt" },
-            { label: "Network", icon: "\uf1eb", target: "network" },
-            { label: "Keyboard", icon: "\uf11c", page: "keyboard" },
-            { label: "Mouse & touchpad", icon: "\uf245", page: "mouse" }
-        ];
+
         if (page === "choice") return optionList.map(o => ({
             label: o[0], choice: o[1], value: String(settings[optionKey]) === String(o[1]) ? "Current" : ""
         }));
@@ -105,10 +105,13 @@ Scope {
                 return { label: c[0], mark: mark, value: mark === current ? "Current" : "" };
             });
         return [
-            { label: "Lock now", icon: "\uf023", lock: true },
+            { label: "Audio", icon: "\uf028", target: "audio" },
+            { label: "Display", icon: "\uf108", target: "brightness" },
+            { label: "Bluetooth", icon: "\uf293", target: "bt" },
+            { label: "Network", icon: "\uf1eb", target: "network" },
+            { label: "Config", detail: "Edit configuration files", icon: "\uf121", page: "config" },
             { label: "Power menu", icon: "\uf011", target: "power" },
-            { label: "System information", icon: "\uf05a", target: "info" },
-            { label: "About mark", detail: "Mark and colours in System information", icon: "\uf53f", page: "look" }
+            { label: "System information", icon: "\uf05a", target: "info" }
         ];
     }
     readonly property var shown: page === "input" ? [] : entries.filter(row => row.label.toLowerCase().includes(query.trim().toLowerCase()))
@@ -123,12 +126,23 @@ Scope {
         navigate(optionReturn);
     }
 
+    function signed(v) {
+        return (v > 0 ? "+" : "") + v.toFixed(1);
+    }
+
+    // Slider value to a step of 0.1 within the row's range, then saved
+    function setSlider(row, v) {
+        v = Math.max(row.min, Math.min(row.max, Math.round(v * 10) / 10));
+        if (v !== row.num) request(["set", row.key, String(v)]);
+    }
+
     function minutes(seconds) {
         return seconds ? Math.round(seconds / 60) + " min" : "—";
     }
 
     function navigate(next) {
         page = next;
+        dragKey = "";
         pointer = Qt.point(-1, -1);
         query = "";
         search.text = "";
@@ -157,6 +171,7 @@ Scope {
     function activate(row) {
         if (!row || row.disabled || backend.running) return;
         if (row.page) { navigate(row.page); return; }
+        if (row.kind === "slider") return;
         if (row.look) { lookMark = row.look; lookTitle = row.label; navigate("lookcolour"); return; }
         if (row.mark) {
             Quickshell.execDetached(["sh", "-c", 'mkdir -p "$HOME/.local/state/yunagi" && printf %s "$1" > "$HOME/.local/state/yunagi/about-mark"', "sh", row.mark]);
@@ -179,7 +194,6 @@ Scope {
         } else {
             open = false;
             if (row.preview) Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-screensaver"]);
-            else if (row.lock) Quickshell.execDetached(["hyprlock"]);
             else if (row.file) Quickshell.execDetached(["kitty", "-e", "nvim", Quickshell.env("HOME") + "/" + row.file]);
             else if (row.packages) Quickshell.execDetached(["kitty", "--class", "yunagi-pkg", "-o", "confirm_os_window_close=0", "-e", "yunagi-pkg"]);
             else Quickshell.execDetached(["qs", "ipc", "call", row.target, "toggle"]);
@@ -189,7 +203,8 @@ Scope {
     function back() {
         if (page === "root") open = false;
         else navigate(page === "choice" || page === "input" ? optionReturn : page === "lookcolour" ? "look"
-                      : page === "look" ? "system" : page === "keyboard" || page === "mouse" ? "devices" : "root");
+                      : page === "config" ? "system"
+                      : ["screen", "keyboard", "mouse", "git", "look"].includes(page) ? "prefs" : "root");
     }
 
     FileView {
@@ -312,6 +327,10 @@ Scope {
                                 root.selected = (root.selected + 1) % Math.max(1, root.shown.length);
                             else if (event.key === Qt.Key_Up || event.key === Qt.Key_Backtab)
                                 root.selected = (root.selected + root.shown.length - 1) % Math.max(1, root.shown.length);
+                            else if ((event.key === Qt.Key_Left || event.key === Qt.Key_Right) && root.shown[root.selected]?.kind === "slider") {
+                                const row = root.shown[root.selected];
+                                root.setSlider(row, row.num + (event.key === Qt.Key_Right ? 0.1 : -0.1));
+                            }
                             else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                                 root.activate(root.shown[root.selected]);
                             else return;
@@ -366,9 +385,11 @@ Scope {
                             }
                             Text {
                                 anchors.right: parent.right
-                                anchors.rightMargin: 14
+                                anchors.rightMargin: entry.modelData.kind === "slider" ? 204 : 14
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: entry.modelData.value !== undefined ? entry.modelData.value : "›"
+                                text: entry.modelData.kind === "slider"
+                                    ? root.signed(root.dragKey === entry.modelData.key ? root.dragValue : entry.modelData.num)
+                                    : entry.modelData.value !== undefined ? entry.modelData.value : "›"
                                 color: entry.current || entry.modelData.value === "On" ? Colors.primary : Colors.textDim
                                 font.family: "sans-serif"
                                 font.pixelSize: 14
@@ -384,6 +405,63 @@ Scope {
                                     root.pointer = p;
                                 }
                                 onClicked: root.activate(entry.modelData)
+                            }
+                            // Drag or click to set; ← → on the keyboard step by 0.1
+                            Item {
+                                id: slider
+                                visible: entry.modelData.kind === "slider"
+                                readonly property var row: entry.modelData
+                                readonly property real at: row.kind === "slider"
+                                    ? ((root.dragKey === row.key ? root.dragValue : row.num) - row.min) / (row.max - row.min) : 0
+                                anchors.right: parent.right
+                                anchors.rightMargin: 14
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 180
+                                height: 22
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width
+                                    height: 4
+                                    color: Colors.outlineVariant
+                                    Rectangle {
+                                        width: parent.width * slider.at
+                                        height: parent.height
+                                        color: entry.current ? Colors.primary : Colors.text
+                                    }
+                                }
+                                // Mark at the default (0)
+                                Rectangle {
+                                    visible: slider.row.min < 0
+                                    x: slider.width * (0 - slider.row.min) / (slider.row.max - slider.row.min) - 1
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 2
+                                    height: 10
+                                    color: Colors.textDim
+                                }
+                                Rectangle {
+                                    x: (slider.width - width) * slider.at
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 14
+                                    height: 14
+                                    color: entry.current ? Colors.primary : Colors.text
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -6
+                                    cursorShape: Qt.PointingHandCursor
+                                    function valueAt(x) {
+                                        const r = slider.row;
+                                        const v = r.min + Math.max(0, Math.min(1, (x - 6) / slider.width)) * (r.max - r.min);
+                                        return Math.round(v * 10) / 10;
+                                    }
+                                    onPressed: mouse => { root.selected = entry.index; root.dragKey = slider.row.key; root.dragValue = valueAt(mouse.x); }
+                                    onPositionChanged: mouse => { if (pressed) root.dragValue = valueAt(mouse.x); }
+                                    // The dragged value stays shown until the saved settings come back
+                                    onReleased: {
+                                        if (root.dragValue === slider.row.num) root.dragKey = "";
+                                        else root.setSlider(slider.row, root.dragValue);
+                                    }
+                                }
                             }
                         }
                     }
