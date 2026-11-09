@@ -12,6 +12,7 @@ noto-fonts-emoji
 kitty
 fish
 fastfetch
+htop
 vim
 nano
 

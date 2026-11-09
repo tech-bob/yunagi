@@ -27,10 +27,6 @@ Disk encryption is chosen by default: the root is encrypted with LUKS2 using the
 user's password, asked for at boot, and after that you are logged in
 automatically. Without encryption the login screen asks for the password.
 
-> **Note:** If no release asset is published yet, build the ISO locally (see
-> [Building the ISO](#building-the-iso)) or install from an existing Arch system
-> with `install.sh` below.
-
 ### Already on Arch
 
 With a sudo user:
@@ -88,8 +84,7 @@ loads Yunagi's defaults; they win over the defaults.
 ## Packages
 
 Settings menu → Packages, or **Packages** among the apps in GNOME. The tool is
-the TUI binary `yunagi-pkg` (see [`docs/packages.md`](docs/packages.md) for full usage;
-rename to e.g. `docs/packages.md` when publishing).
+the TUI binary `yunagi-pkg`; full usage in [`docs/packages.md`](docs/packages.md).
 
 | Key | Action |
 |---|---|
@@ -107,8 +102,8 @@ binary is prebuilt, so neither Rust nor the network is needed at install time.
 
 ## Boot look
 
-On installs that already use Limine, `install.sh` applies the **Ion** theme
-(Limine menu + Plymouth splash). Details and a live Plymouth preview live in
+The ISO installs Limine with the **Ion** theme and a Plymouth splash;
+`install.sh` applies the same theme where Limine is already in use. Details and a live Plymouth preview live in
 [`boot/README.md`](boot/README.md). Visual identity (mark, palette, wordmark) is
 documented in [`branding/BRAND.md`](branding/BRAND.md); the locked mark is
 `branding/neon/diamant.svg`.
