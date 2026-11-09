@@ -11,5 +11,8 @@
   (Omarchy installs in under a minute this way). This also makes every ISO
   offline.
 - **UEFI boot menu** of the ISO in Yunagi's look.
+- **AI user:** an optional account for AI agents, chosen in the installer and
+  kept apart from the admin: no sudo, a shared directory with the admin, and a
+  set of agent tools. To be designed before it is built.
 - **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
   Danish).
