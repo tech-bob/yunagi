@@ -1,9 +1,14 @@
 # Yunagi
 
 A desktop for Arch Linux: Hyprland with a custom Quickshell shell. Packages come
-only from Arch's official repositories; the AUR is opt-in through the Packages tool.
+only from Arch's official repositories; the AUR is opt-in through the Packages
+tool (`yunagi-pkg`).
+
+Version **0.5**. See [`TODO.md`](TODO.md) for the path toward 1.0.
 
 ## Installation
+
+### From the ISO
 
 Download the ISO from [Releases](https://github.com/tech-bob/yunagi/releases),
 write it to a USB stick and boot from it; it runs just as well in a virtual
@@ -22,6 +27,10 @@ Disk encryption is chosen by default: the root is encrypted with LUKS2 using the
 user's password, asked for at boot, and after that you are logged in
 automatically. Without encryption the login screen asks for the password.
 
+> **Note:** If no release asset is published yet, build the ISO locally (see
+> [Building the ISO](#building-the-iso)) or install from an existing Arch system
+> with `install.sh` below.
+
 ### Already on Arch
 
 With a sudo user:
@@ -36,6 +45,17 @@ It asks for a desktop: **yunagi** (Hyprland with the Yunagi shell), **gnome**
 (GNOME with a lean set of apps) or **minimal** (only NetworkManager). Yunagi is
 kept in `~/.local/share/yunagi`; the files in `~/.config` are ordinary copies that
 you own, and conflicting files are moved to `~/.yunagi-backup-<date>`.
+
+Optional flags (useful from the ISO chroot or scripts):
+
+```
+./install.sh --user NAME [--desktop yunagi|gnome|minimal] [--apps|--no-apps] [--keyboard LAYOUT]
+```
+
+- `--user` — install for this user (required when run as root)
+- `--desktop` — skip the interactive desktop prompt
+- `--apps` / `--no-apps` — install or skip the programs in `apps.txt`
+- `--keyboard` — set the login-screen and desktop keyboard layout
 
 ## Keybindings
 
@@ -67,15 +87,31 @@ loads Yunagi's defaults; they win over the defaults.
 
 ## Packages
 
-Settings menu → Packages, or Packages among the apps in GNOME.
+Settings menu → Packages, or **Packages** among the apps in GNOME. The tool is
+the TUI binary `yunagi-pkg` (see [`docs/packages.md`](docs/packages.md) for full usage;
+rename to e.g. `docs/packages.md` when publishing).
 
 | Key | Action |
 |---|---|
 | `/` | Search |
 | `i` / `r` | Install / remove |
 | `Tab` | Switch between Installed and Search |
+| `1` / `2` | Jump to Installed / Search |
+| `j` / `k` | Move down / up |
 | `a` | Enable the AUR (builds paru) |
 | `q` | Quit |
+
+On a normal `install.sh` run the binary is built from `yunagi-pkg/` (Rust is
+installed only for the build if it was not already present). On the ISO the
+binary is prebuilt, so neither Rust nor the network is needed at install time.
+
+## Boot look
+
+On installs that already use Limine, `install.sh` applies the **Ion** theme
+(Limine menu + Plymouth splash). Details and a live Plymouth preview live in
+[`boot/README.md`](boot/README.md). Visual identity (mark, palette, wordmark) is
+documented in [`branding/BRAND.md`](branding/BRAND.md); the locked mark is
+`branding/neon/diamant.svg`.
 
 ## Keyring and SSH
 
