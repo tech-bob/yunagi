@@ -29,8 +29,6 @@ GRADIENTS = '''
 <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
   <feGaussianBlur stdDeviation="8"/>
 </filter>
-<radialGradient id="veil"><stop stop-color="#3e6c91" stop-opacity=".23"/>
-  <stop offset="1" stop-color="#101019" stop-opacity="0"/></radialGradient>
 '''
 
 
@@ -63,17 +61,6 @@ WORD = wordmark('Yunagi')
 WORD_CAPS = wordmark('YUNAGI')
 
 
-def lettering(x, y, width):
-    return f'<svg x="{x}" y="{y}" width="{width}" height="{width * 140 / 470}" viewBox="0 0 470 140">{WORD}</svg>'
-
-
-def atmosphere():
-    return '''<rect width="1920" height="1080" fill="#08090e"/>
-<ellipse cx="1270" cy="510" rx="1000" ry="500" fill="url(#veil)" transform="rotate(-21 1270 510)"/>
-<path d="M-200 910 L2120 -50" stroke="#66c3ed" stroke-opacity=".045" stroke-width="100" filter="url(#glow)"/>
-<path d="M-200 910 L2120 -50" stroke="#76d9fa" stroke-opacity=".37" stroke-width="2"/>'''
-
-
 def write(name, width, height, body):
     path = OUT / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,7 +68,9 @@ def write(name, width, height, body):
     subprocess.run(['rsvg-convert', str(path.with_suffix('.svg')), '-o', str(path.with_suffix('.png'))], check=True)
 
 
-write('limine', 1920, 1080, atmosphere() + diamond(1352, 367, 216, True) + diamond(1352, 367, 216) + lettering(1290, 616, 340))
+# Limine: plain dark ground, the mark small in the bottom-right corner
+write('limine', 1920, 1080, '<rect width="1920" height="1080" fill="#08090e"/>'
+      + diamond(1712, 872, 112, True) + diamond(1712, 872, 112))
 write('plymouth/wordmark', 470, 140, WORD_CAPS)
 write('wordmark', 470, 140, WORD)
 for target in ('sddm/yunagi/wordmark.png', 'home/.config/hypr/lock/wordmark.png'):

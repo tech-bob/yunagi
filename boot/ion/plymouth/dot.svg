@@ -10,6 +10,4 @@
 <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
   <feGaussianBlur stdDeviation="8"/>
 </filter>
-<radialGradient id="veil"><stop stop-color="#3e6c91" stop-opacity=".23"/>
-  <stop offset="1" stop-color="#101019" stop-opacity="0"/></radialGradient>
 </defs><radialGradient id="d"><stop stop-color="#e8f8ff"/><stop offset=".25" stop-color="#76d9fa"/><stop offset="1" stop-color="#76d9fa" stop-opacity="0"/></radialGradient><circle cx="24" cy="24" r="24" fill="url(#d)"/></svg>
