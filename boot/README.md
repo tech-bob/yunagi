@@ -1,7 +1,7 @@
 # Ion boot theme
 
 Ion (C3.1) is selected for Limine. Plymouth shows the rainbow yunagi wordmark in
-the middle of a plain dark screen, with a light orbiting it on a tilted ellipse
+the middle of a plain dark screen, breathing a soft glow
 at start-up; shutdown and reboot show the wordmark alone.
 The original diamond geometry is unchanged in Limine.
 

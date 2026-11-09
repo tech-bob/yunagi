@@ -77,10 +77,9 @@ for target in ('sddm/yunagi/wordmark.png', 'home/.config/hypr/lock/wordmark.png'
     shutil.copyfile(OUT / 'wordmark.png', REPO / target)
 # Password field for the disk unlock prompt
 write('plymouth/field', 420, 56, '<rect x=".5" y=".5" width="419" height="55" rx="10" fill="#0e0e14" fill-opacity=".9" stroke="#2a2a35"/>')
-# Orbit around the wordmark: ellipse a=300, b=90, tilted -10 degrees, in a 680x300 canvas
-write('plymouth/orbit', 680, 300, '<ellipse cx="340" cy="150" rx="300" ry="90" transform="rotate(-10 340 150)" '
-      'fill="none" stroke="url(#ion)" stroke-opacity=".45" stroke-width="2"/>')
-write('plymouth/dot', 48, 48, '<radialGradient id="d"><stop stop-color="#e8f8ff"/><stop offset=".25" stop-color="#76d9fa"/>'
-      '<stop offset="1" stop-color="#76d9fa" stop-opacity="0"/></radialGradient><circle cx="24" cy="24" r="24" fill="url(#d)"/>')
+# Glow behind the wordmark, breathing at start-up: the wordmark blurred, 60 px of room on every side
+write('plymouth/glow', 590, 260, '<filter id="breath" x="-30%" y="-60%" width="160%" height="220%">'
+      '<feGaussianBlur stdDeviation="16"/></filter>'
+      f'<g filter="url(#breath)"><g transform="translate(60 60)">{WORD_CAPS}</g></g>')
 write('plymouth/pulse', 64, 4, '<rect width="64" height="4" rx="2" fill="url(#ion)"/>')
 write('plymouth/track', 64, 4, '<rect width="64" height="4" rx="2" fill="#2c293b"/>')

@@ -7,7 +7,7 @@ in lower case, `yunagi`; text uses `Yunagi`.
 - **Installer:** pixel wordmark `yunagi` in the rainbow, drawn in at the end
 - **Boot menus (ISO):** archiso's own, renamed Yunagi
 - **Limine:** Ion: plain dark ground, the diamond small in the bottom-right corner, 1920x1080, `../boot/ion`
-- **Plymouth:** rainbow wordmark with an orbiting light at start-up; the wordmark
+- **Plymouth:** rainbow wordmark breathing a soft glow at start-up; the wordmark
   alone at shutdown and reboot, `../boot/ion/plymouth`
 - **SDDM and lock screen:** Glass: blurred photo, translucent panel, light clock
   and rainbow wordmark, `../sddm/yunagi` and `hyprlock.conf`

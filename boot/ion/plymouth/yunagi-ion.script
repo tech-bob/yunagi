@@ -1,10 +1,9 @@
-# Ion: the wordmark in the middle with a light orbiting it, on a plain dark ground.
+# Ion: the wordmark in the middle, breathing a soft glow at start-up, on a plain dark ground.
 # The disk password goes in a field below it; after that a bar shows the start-up.
 Window.SetBackgroundTopColor(0.031, 0.035, 0.055);
 Window.SetBackgroundBottomColor(0.031, 0.035, 0.055);
 
-orbit = Sprite();
-dot = Sprite();
+glow = Sprite();
 wordmark = Sprite();
 field = Sprite();
 entry = Sprite();
@@ -13,7 +12,7 @@ track = Sprite();
 fill = Sprite();
 hint = Sprite();
 phase = 0;
-# Only start-up gets the orbit; shutdown and reboot show the name alone
+# Only start-up (and the disk password) breathes; shutdown and reboot show the name alone
 booting = Plymouth.GetMode() == "boot";
 state = "normal";
 unlocked = 0;
@@ -43,10 +42,8 @@ fun layout() {
     global.fy = cy + 200 * scale;
     wordmark.SetImage(Image("wordmark.png").Scale(470 * scale, 140 * scale));
     wordmark.SetPosition(cx - 235 * scale, cy - 70 * scale, 1);
-    orbit.SetImage(Image("orbit.png").Scale(680 * scale, 300 * scale));
-    orbit.SetPosition(cx - 340 * scale, cy - 150 * scale, 0);
-    if (booting) orbit.SetOpacity(0.8); else orbit.SetOpacity(0);
-    dot.SetImage(Image("dot.png").Scale(36 * scale, 36 * scale));
+    glow.SetImage(Image("glow.png").Scale(590 * scale, 260 * scale));
+    glow.SetPosition(cx - 295 * scale, cy - 130 * scale, 0);
     field.SetImage(Image("field.png").Scale(420 * scale, 56 * scale));
     field.SetPosition(cx - 210 * scale, fy, 10);
     track.SetImage(Image("track.png").Scale(240 * scale, Math.Max(2, 4 * scale)));
@@ -56,15 +53,10 @@ fun layout() {
 
 fun refresh() {
     if (width != Window.GetWidth() || height != Window.GetHeight()) layout();
-    global.phase += 0.025;
-    # Point on the orbit (a=300, b=90, tilted -10 degrees); behind the name on the far side
-    a = Math.Cos(phase) * 300; b = Math.Sin(phase) * 90;
-    x = a * 0.985 + b * 0.174;
-    y = b * 0.985 - a * 0.174;
-    dot.SetPosition(cx + x * scale - 18 * scale, cy + y * scale - 18 * scale, 2);
-    if (!booting) dot.SetOpacity(0);
-    else if (Math.Sin(phase) < 0) { dot.SetZ(0); dot.SetOpacity(0.5); }
-    else { dot.SetZ(2); dot.SetOpacity(1); }
+    # One breath about every four seconds (refresh runs at 50 Hz)
+    global.phase += 0.032;
+    if (booting) glow.SetOpacity(0.15 + 0.75 * (0.5 - 0.5 * Math.Cos(phase)));
+    else glow.SetOpacity(0);
     # The bar follows Plymouth's estimate, and creeps on by itself if that stalls
     if (unlocked && state == "normal") {
         global.since += 1;
