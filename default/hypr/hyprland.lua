@@ -280,6 +280,7 @@ hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call power toggle"))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("qs ipc call info toggle"))
+hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd("kitty --class yunagi-pkg -o confirm_os_window_close=0 -e yunagi-pkg"))
 -- Fullscreen (covers the bar), same key toggles back
 hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call clipboard toggle"))

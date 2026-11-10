@@ -63,6 +63,7 @@ Optional flags (useful from the ISO chroot or scripts):
 | `Super+E` | File manager |
 | `Super+V` | Clipboard history |
 | `Super+B` | System information |
+| `Super+Y` | Packages |
 | `Super+M` | Power menu |
 | `Super+L` | Lock |
 | `Super+T` | Night light |
