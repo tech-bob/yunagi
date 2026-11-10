@@ -283,6 +283,14 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                     app.refresh();
                 }
             }
+            KeyCode::Char('u') => {
+                run_in_terminal(terminal, "sudo", &["pacman", "-Syu"])?;
+                app.refresh();
+            }
+            KeyCode::Char('U') if app.aur => {
+                run_in_terminal(terminal, "paru", &["-Syu"])?;
+                app.refresh();
+            }
             KeyCode::Char('a') if !app.aur => {
                 run_in_terminal(terminal, "sh", &["-c", ENABLE_AUR])?;
                 app.aur = has_paru();
@@ -456,7 +464,13 @@ fn draw(f: &mut Frame, app: &mut App) {
         vec![Span::from(k.to_string()).fg(ACCENT).bold(), Span::from(format!(" {d}   ")).dark_gray()]
     };
     let mut spans = Vec::new();
-    for (k, d) in [("/", "search"), ("i", "install"), ("r", "remove"), ("tab", "switch"), ("q", "quit")] {
+    for (k, d) in [("/", "search"), ("i", "install"), ("r", "remove"), ("u", "update (pacman)")] {
+        spans.extend(hint(k, d));
+    }
+    if app.aur {
+        spans.extend(hint("U", "update (paru)"));
+    }
+    for (k, d) in [("tab", "switch"), ("q", "quit")] {
         spans.extend(hint(k, d));
     }
     if !app.aur {
