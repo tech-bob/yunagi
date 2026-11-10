@@ -40,7 +40,7 @@ selected row appear in the right panel (`pacman -Qi` / `pacman -Si` /
 | `i` | Install the selected package if it is not installed |
 | `r` | Remove the selected installed package (`pacman -Rns`) |
 | `u` | Update all packages with pacman |
-| `U` | Update all packages with paru, AUR included (only when paru is installed) |
+| `p` | Update all packages with paru, AUR included (only when paru is installed) |
 | `Tab` | Toggle Installed ↔ Search |
 | `1` | Installed tab |
 | `2` | Search tab |
@@ -51,12 +51,12 @@ selected row appear in the right panel (`pacman -Qi` / `pacman -Si` /
 | `Ctrl+C` | Quit |
 
 Footer hints mirror these: `/` search, `i` install, `r` remove, `u` update,
-`U` update with paru when available, `tab` switch, `q` quit, and `a` enable AUR
+`p` update with paru when available, `tab` switch, `q` quit, and `a` enable AUR
 when needed.
 
 ## Install, remove and update behaviour
 
-When you press `i`, `r`, `u` or `U`, the TUI exits to the plain terminal so sudo / pacman /
+When you press `i`, `r`, `u` or `p`, the TUI exits to the plain terminal so sudo / pacman /
 paru can prompt normally, then waits for Enter before restoring the UI.
 
 - **Official package:** `sudo pacman -S <name>`

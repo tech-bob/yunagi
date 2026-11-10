@@ -287,7 +287,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                 run_in_terminal(terminal, "sudo", &["pacman", "-Syu"])?;
                 app.refresh();
             }
-            KeyCode::Char('U') if app.aur => {
+            KeyCode::Char('p') if app.aur => {
                 run_in_terminal(terminal, "paru", &["-Syu"])?;
                 app.refresh();
             }
@@ -468,7 +468,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         spans.extend(hint(k, d));
     }
     if app.aur {
-        spans.extend(hint("U", "update (paru)"));
+        spans.extend(hint("p", "update (paru)"));
     }
     for (k, d) in [("tab", "switch"), ("q", "quit")] {
         spans.extend(hint(k, d));
