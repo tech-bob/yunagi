@@ -4,7 +4,7 @@ A desktop for Arch Linux: Hyprland with a custom Quickshell shell. Packages come
 only from Arch's official repositories; the AUR is opt-in through the Packages
 tool (`yunagi-pkg`).
 
-Version **0.5**. See [`TODO.md`](TODO.md) for the path toward 1.0.
+Version **0.6**. See [`TODO.md`](TODO.md) for the path toward 1.0.
 
 ## Installation
 
