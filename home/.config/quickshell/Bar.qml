@@ -3,6 +3,7 @@ import Quickshell.Bluetooth
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Networking
+import Quickshell.Services.UPower
 import Quickshell.Services.SystemTray
 import Quickshell.Wayland
 import Quickshell.Widgets
@@ -531,6 +532,18 @@ Scope {
                             onClicked: root.togglePanel("brightness", bar.screen)
                             onWheel: wheel => brightness.step(bar.screen.name, wheel.angleDelta.y > 0)
                         }
+                    }
+
+                    // Wireless mouse battery (UPower, e.g. Logitech HID++)
+                    Text {
+                        readonly property var dev: UPower.devices.values.filter(d => d.type === UPowerDeviceType.Mouse && d.isPresent)[0] ?? null
+                        readonly property int pct: dev ? Math.round(dev.percentage <= 1 ? dev.percentage * 100 : dev.percentage) : 0
+                        visible: dev !== null
+                        text: "󰍽 " + pct + "%"
+                        color: pct < 20 ? "#f7768e" : "#9ece6a"
+                        font.family: "Hack Nerd Font"
+                        font.pixelSize: 15
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     Text {
