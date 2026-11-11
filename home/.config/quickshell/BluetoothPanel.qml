@@ -27,6 +27,31 @@ Scope {
         return "󰂯";
     }
 
+    // USB-dongle headsets (HeadsetControl); polled while the panel is open
+    property var headsets: []
+
+    Process {
+        id: hsProc
+        command: ["headsetcontrol", "-b", "-o", "json"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.headsets = JSON.parse(text).devices.filter(d => d.battery && (d.battery.status === "BATTERY_AVAILABLE" || d.battery.status === "BATTERY_CHARGING"));
+                } catch (e) {
+                    root.headsets = [];
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 60000
+        running: root.open
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: hsProc.running = true
+    }
+
     Process {
         running: true
         command: ["sh", "-c", "ls /sys/class/bluetooth 2>/dev/null | head -1"]
@@ -163,15 +188,27 @@ Scope {
             }
 
             SectionHead {
-                visible: btCol.receiver.length > 0
+                visible: btCol.receiver.length + root.headsets.length > 0
                 label: "RECEIVER"
                 value: ""
             }
 
             Column {
-                visible: btCol.receiver.length > 0
+                visible: btCol.receiver.length + root.headsets.length > 0
                 width: parent.width
                 spacing: 2
+
+                Repeater {
+                    model: root.headsets
+
+                    DevRow {
+                        required property var modelData
+                        icon: "󰋋"
+                        label: modelData.product
+                        detail: modelData.battery.status === "BATTERY_CHARGING" ? "charging" : modelData.battery.level + "%"
+                        active: true
+                    }
+                }
 
                 Repeater {
                     model: btCol.receiver
