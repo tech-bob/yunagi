@@ -509,8 +509,14 @@ Scope {
 
                     Rectangle {
                         required property var modelData
+                        // Lit button shows where the monitor sits relative to main
+                        readonly property var me: Quickshell.screens.find(sc => sc.name === briCol.mon)
+                        readonly property var mainSc: Quickshell.screens.find(sc => sc.name === root.mainName)
+                        readonly property bool side: !!me && !!mainSc && me !== mainSc && !root.aboveNames.includes(briCol.mon)
                         readonly property bool on: modelData.id === "main" ? root.mainName === briCol.mon
-                            : modelData.id === "up" && root.aboveNames.includes(briCol.mon)
+                            : modelData.id === "up" ? root.aboveNames.includes(briCol.mon)
+                            : modelData.id === "left" ? side && me.x < mainSc.x
+                            : modelData.id === "right" && side && me.x > mainSc.x
                         opacity: modelData.id === "" ? 0 : 1
                         enabled: modelData.id !== ""
                         width: (briCol.width - 12) / 3
