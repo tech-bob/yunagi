@@ -28,7 +28,11 @@ Scope {
     readonly property var textSteps: [9, 10, 11, 12, 13, 14, 16]
     readonly property var scaleSteps: [1, 1.25, 1.6, 2, 3, 4]
 
+    // Monitor being configured; the panel's own screen until one is picked in the map
+    property string picked: ""
+
     onOpenChanged: if (open) {
+        picked = "";
         if (!ddcList.running)
             ddcList.running = true;
         dispRead.running = true;
@@ -251,7 +255,7 @@ Scope {
 
         Column {
             id: briCol
-            readonly property string mon: root.screen ? root.screen.name : ""
+            readonly property string mon: root.picked || (root.screen ? root.screen.name : "")
             readonly property bool hasBri: root.has(mon)
             readonly property int bri: root.get(mon)
             anchors.left: parent.left
@@ -316,6 +320,73 @@ Scope {
             }
 
             Divider {}
+
+            // Layout map: click a monitor to configure it
+            Item {
+                id: map
+                readonly property var scr: Quickshell.screens
+                readonly property real minX: Math.min(...scr.map(sc => sc.x))
+                readonly property real minY: Math.min(...scr.map(sc => sc.y))
+                readonly property real spanW: Math.max(...scr.map(sc => sc.x + sc.width)) - minX
+                readonly property real spanH: Math.max(...scr.map(sc => sc.y + sc.height)) - minY
+                readonly property real k: Math.min(width / Math.max(1, spanW), 110 / Math.max(1, spanH))
+                visible: scr.length > 1
+                width: parent.width
+                height: spanH * k
+
+                Repeater {
+                    model: map.scr
+
+                    Rectangle {
+                        id: mapMon
+                        required property var modelData
+                        readonly property bool cur: modelData.name === briCol.mon
+                        x: (map.width - map.spanW * map.k) / 2 + (modelData.x - map.minX) * map.k + 2
+                        y: (modelData.y - map.minY) * map.k + 2
+                        width: modelData.width * map.k - 4
+                        height: modelData.height * map.k - 4
+                        radius: 0
+                        color: cur ? Qt.alpha(Colors.primary, 0.16) : (mapMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                        border.color: cur ? Colors.primary : Colors.outlineVariant
+                        border.width: 1
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 2
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: mapMon.modelData.model || mapMon.modelData.name
+                                color: mapMon.cur ? Colors.primary : Colors.textDim
+                                font.family: "Hack Nerd Font"
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                width: Math.min(implicitWidth, mapMon.width - 8)
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                visible: mapMon.modelData.name === root.mainName
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: "main"
+                                color: Colors.primary
+                                font.family: "Hack Nerd Font"
+                                font.pixelSize: 10
+                            }
+                        }
+
+                        MouseArea {
+                            id: mapMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.picked = mapMon.modelData.name
+                        }
+                    }
+                }
+            }
+
+            Divider { visible: map.visible }
 
             SectionHead {
                 visible: briCol.hasBri
