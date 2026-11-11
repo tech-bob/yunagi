@@ -417,6 +417,14 @@ hl.window_rule({
     size   = "1040 640",
 })
 
+hl.window_rule({
+    name   = "calculator",
+    match  = { class = "org.gnome.Calculator" },
+    float  = true,
+    center = true,
+    size   = "380 620",
+})
+
 -- Hyprland-run windowrule
 hl.window_rule({
     name  = "move-hyprland-run",
