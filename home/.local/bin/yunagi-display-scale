@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # yunagi-display-scale MONITOR SCALE [RATE]   scale (and refresh rate) of one monitor
-# yunagi-display-scale --move MONITOR -1|1     move one monitor left or right in the order
+# yunagi-display-scale --move MONITOR -1|1     move one monitor left or right (from above: down beside main)
 # yunagi-display-scale --main MONITOR          main monitor: workspace 1 and notifications
 # yunagi-display-scale --up MONITOR            toggle placing the monitor above the main one
 # yunagi-display-scale --apply                 re-lay out the connected monitors (hotplug)
@@ -43,7 +43,16 @@ for m in mons:
 
 by_name = {m["name"]: m for m in mons}
 args = sys.argv[1:]
-if args and args[0] == "--move" and args[1] in by_name:
+if args and args[0] == "--move" and args[1] in by_name and screens[key(by_name[args[1]])].get("above", False):
+    # From the top row: down next to the main monitor, on the chosen side
+    k = key(by_name[args[1]])
+    screens[k]["above"] = False
+    row_keys = [o for o in order if o in {key(m) for m in mons} and not screens[o].get("above", False) and o != k]
+    ref = main if main in row_keys else (row_keys[0] if row_keys else None)
+    if ref:
+        order.remove(k)
+        order.insert(order.index(ref) + (1 if args[2] == "1" else 0), k)
+elif args and args[0] == "--move" and args[1] in by_name:
     k = key(by_name[args[1]])
     up = screens[k].get("above", False)
     present = [o for o in order if o in {key(m) for m in mons} and screens[o].get("above", False) == up]

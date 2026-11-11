@@ -516,14 +516,14 @@ Scope {
                         width: (briCol.width - 12) / 3
                         height: 32
                         radius: 0
-                        color: on ? Colors.surfaceContainerHighest : (posMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                        color: on ? Qt.alpha(Colors.primary, 0.16) : (posMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
                         border.color: on ? Colors.primary : Colors.outlineVariant
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text: modelData.label ?? ""
-                            color: parent.on ? Colors.text : Colors.textDim
+                            color: parent.on ? Colors.primary : Colors.textDim
                             font.family: "Hack Nerd Font"
                             font.pixelSize: 13
                             font.weight: Font.Bold
