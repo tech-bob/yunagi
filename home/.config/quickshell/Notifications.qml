@@ -8,6 +8,8 @@ Scope {
     id: root
 
     required property bool dnd
+    // Main monitor from yunagi-display-scale; empty means the focused one
+    property string mainScreen: ""
     ScreenTarget { id: popupTarget }
 
     NotificationServer {
@@ -17,7 +19,7 @@ Scope {
         imageSupported: true
         onNotification: n => {
             if (notifs.trackedNotifications.values.length === 0)
-                popupTarget.select();
+                popupTarget.select(Quickshell.screens.find(sc => sc.name === root.mainScreen) ?? null);
             n.tracked = true;
         }
     }

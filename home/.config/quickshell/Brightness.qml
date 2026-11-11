@@ -94,15 +94,14 @@ Scope {
         const m = Object.assign({}, monScale);
         m[name] = s;
         monScale = m;
-        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale", name, String(s)]);
+        display([name, String(s)]);
     }
 
     function setRate(name, r) {
         const m = Object.assign({}, monRate);
         m[name] = r;
         monRate = m;
-        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale", name,
-                                 String(monScale[name] ?? 1), r.toFixed(2)]);
+        display([name, String(monScale[name] ?? 1), r.toFixed(2)]);
     }
 
     Process {
@@ -172,7 +171,32 @@ Scope {
         function onScreensChanged() {
             if (!ddcList.running)
                 ddcList.running = true;
+            layoutTimer.restart();
         }
+    }
+
+    // Saved monitor order and main monitor (yunagi-display-scale); re-laid out on hotplug
+    function display(args) {
+        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale"].concat(args));
+    }
+
+    Timer {
+        id: layoutTimer
+        interval: 1000
+        running: true
+        onTriggered: root.display(["--apply"])
+    }
+
+    FileView {
+        id: monState
+        path: Quickshell.env("HOME") + "/.local/state/yunagi/monitors.json"
+        watchChanges: true
+        onFileChanged: reload()
+    }
+
+    readonly property string mainName: {
+        try { return JSON.parse(monState.text()).mainName || ""; }
+        catch (e) { return ""; }
     }
 
     Process {
@@ -450,6 +474,63 @@ Scope {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: if (!parent.on) root.setRate(briCol.mon, modelData)
+                        }
+                    }
+                }
+            }
+
+            Divider { visible: Quickshell.screens.length > 1 }
+
+            SectionHead {
+                visible: Quickshell.screens.length > 1
+                label: "POSITION"
+                value: ""
+            }
+
+            Row {
+                id: posRow
+                visible: Quickshell.screens.length > 1
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { id: "left", label: "󰁍" },
+                        { id: "main", label: "main" },
+                        { id: "right", label: "󰁔" }
+                    ]
+
+                    Rectangle {
+                        required property var modelData
+                        readonly property bool on: modelData.id === "main" && root.mainName === briCol.mon
+                        width: (briCol.width - 12) / 3
+                        height: 32
+                        radius: 0
+                        color: on ? Colors.surfaceContainerHighest : (posMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                        border.color: on ? Colors.primary : Colors.outlineVariant
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: parent.on ? Colors.text : Colors.textDim
+                            font.family: "Hack Nerd Font"
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                        }
+
+                        MouseArea {
+                            id: posMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                const id = parent.modelData.id;
+                                if (id === "main")
+                                    root.display(["--main", briCol.mon]);
+                                else
+                                    root.display(["--move", briCol.mon, id === "left" ? "-1" : "1"]);
+                            }
                         }
                     }
                 }

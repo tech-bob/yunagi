@@ -1,28 +1,78 @@
 #!/usr/bin/env python3
-# yunagi-display-scale MONITOR SCALE [RATE]
-# Sets the scale (and refresh rate) of one monitor, lays the monitors out edge to edge from left to
-# right, and saves the layout to ~/.local/state/yunagi/monitors.lua (loaded by hyprland.lua).
+# yunagi-display-scale MONITOR SCALE [RATE]   scale (and refresh rate) of one monitor
+# yunagi-display-scale --move MONITOR -1|1     move one monitor left or right in the order
+# yunagi-display-scale --main MONITOR          main monitor: workspace 1 and notifications
+# yunagi-display-scale --apply                 re-lay out the connected monitors (hotplug)
+#
+# Monitors are remembered by description, so the settings follow the screen when
+# MST/dock connector names shift. Connected monitors are laid out edge to edge in
+# the saved order, without gaps for missing ones. State: monitors.json; Hyprland
+# loads the generated monitors.lua at startup.
 import json, os, subprocess, sys
 
-name, scale = sys.argv[1], float(sys.argv[2])
-rate = float(sys.argv[3]) if len(sys.argv) > 3 else None
-mons = json.loads(subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True).stdout)
+STATE = os.path.expanduser("~/.local/state/yunagi")
+JSON, LUA = os.path.join(STATE, "monitors.json"), os.path.join(STATE, "monitors.lua")
+
+
+def hypr(*args):
+    return subprocess.run(["hyprctl", *args], capture_output=True, text=True).stdout
+
+
+mons = [m for m in json.loads(hypr("monitors", "-j")) if m.get("mirrorOf", "none") == "none"]
 mons.sort(key=lambda m: m["x"])
 
-lines, x = [], 0
-for m in mons:
-    s = scale if m["name"] == name else m["scale"]
-    hz = rate if rate and m["name"] == name else m["refreshRate"]
-    mode = f'{m["width"]}x{m["height"]}@{hz:.2f}'
-    # desc: keeps the rule on the same screen when MST/dock connector names shift
+
+def key(m):
     unique = sum(n.get("description") == m.get("description") for n in mons) == 1
-    out = f'desc:{m["description"]}' if m.get("description") and unique else m["name"]
-    lines.append(f'hl.monitor({{ output = "{out}", mode = "{mode}", position = "{x}x{m["y"]}", scale = "{s:g}" }})')
-    x += round(m["width"] / s)
+    return f'desc:{m["description"]}' if m.get("description") and unique else m["name"]
 
-subprocess.run(["hyprctl", "eval", "\n".join(lines)], capture_output=True)
 
-state = os.path.expanduser("~/.local/state/yunagi/monitors.lua")
-os.makedirs(os.path.dirname(state), exist_ok=True)
-with open(state, "w") as f:
-    f.write("\n".join(lines) + "\n")
+try:
+    with open(JSON) as f:
+        st = json.load(f)
+except (OSError, ValueError):
+    st = {}
+order, screens, main = st.get("order", []), st.get("screens", {}), st.get("main", "")
+for m in mons:
+    k = key(m)
+    if k not in order:
+        order.append(k)
+    screens.setdefault(k, {"mode": f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}', "scale": m["scale"]})
+
+by_name = {m["name"]: m for m in mons}
+args = sys.argv[1:]
+if args and args[0] == "--move" and args[1] in by_name:
+    k = key(by_name[args[1]])
+    present = [o for o in order if o in {key(m) for m in mons}]
+    i = present.index(k) + int(args[2])
+    if 0 <= i < len(present):
+        a, b = order.index(k), order.index(present[i])
+        order[a], order[b] = order[b], order[a]
+elif args and args[0] == "--main" and args[1] in by_name:
+    main = key(by_name[args[1]])
+elif args and args[0] != "--apply" and args[0] in by_name:
+    m = by_name[args[0]]
+    s = screens[key(m)]
+    s["scale"] = float(args[1])
+    if len(args) > 2:
+        s["mode"] = f'{m["width"]}x{m["height"]}@{float(args[2]):.2f}'
+
+lines, x, main_name = [], 0, ""
+for m in sorted(mons, key=lambda m: order.index(key(m))):
+    k = key(m)
+    s = screens[k]
+    # A saved rate the current link cannot carry (e.g. 144 Hz over HDMI) falls back to the current mode
+    mode = s["mode"] if s["mode"] + "Hz" in m["availableModes"] else f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}'
+    lines.append(f'hl.monitor({{ output = "{k}", mode = "{mode}", position = "{x}x0", scale = "{s["scale"]:g}" }})')
+    x += round(int(mode.split("x")[0]) / s["scale"])
+    if k == main:
+        main_name = m["name"]
+
+hypr("eval", "\n".join(lines))
+
+os.makedirs(STATE, exist_ok=True)
+with open(JSON, "w") as f:
+    json.dump({"order": order, "main": main, "mainName": main_name, "screens": screens}, f, indent=1)
+with open(LUA, "w") as f:
+    rule = [f'hl.workspace_rule({{ workspace = "1", monitor = "{main}", default = true }})'] if main else []
+    f.write("\n".join(lines + rule) + "\n")

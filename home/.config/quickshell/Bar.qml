@@ -641,6 +641,7 @@ Scope {
     // Notifications.qml owns the server and popups; the bar controls Do Not Disturb.
     Notifications {
         dnd: root.dnd
+        mainScreen: brightness.mainName
     }
 
     Calendar {
