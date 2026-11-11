@@ -3,7 +3,6 @@ import Quickshell.Bluetooth
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Networking
-import Quickshell.Services.UPower
 import Quickshell.Services.SystemTray
 import Quickshell.Wayland
 import Quickshell.Widgets
@@ -15,6 +14,8 @@ Scope {
     id: root
 
     property string activePanel: ""
+    property var trayItem: null
+    property real trayX: 0
 
     function closeAll() {
         activePanel = "";
@@ -421,13 +422,6 @@ Scope {
                             source: modelData.icon
                             anchors.verticalCenter: parent.verticalCenter
 
-                            QsMenuAnchor {
-                                id: trayMenu
-                                menu: trayIcon.modelData.menu
-                                anchor.item: trayIcon
-                                anchor.edges: Edges.Bottom
-                            }
-
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -437,8 +431,11 @@ Scope {
                                     if (mouse.button === Qt.MiddleButton)
                                         it.secondaryActivate();
                                     else if (mouse.button === Qt.RightButton || it.onlyMenu) {
-                                        if (it.hasMenu)
-                                            trayMenu.open();
+                                        if (it.hasMenu) {
+                                            root.trayItem = it;
+                                            root.trayX = trayIcon.mapToItem(null, trayIcon.width / 2, 0).x;
+                                            root.togglePanel("tray", bar.screen);
+                                        }
                                     } else
                                         it.activate();
                                 }
@@ -534,18 +531,6 @@ Scope {
                         }
                     }
 
-                    // Wireless mouse battery (UPower, e.g. Logitech HID++)
-                    Text {
-                        readonly property var dev: UPower.devices.values.filter(d => d.type === UPowerDeviceType.Mouse && d.isPresent)[0] ?? null
-                        readonly property int pct: dev ? Math.round(dev.percentage <= 1 ? dev.percentage * 100 : dev.percentage) : 0
-                        visible: dev !== null
-                        text: "󰍽 " + pct + "%"
-                        color: pct < 20 ? "#f7768e" : "#9ece6a"
-                        font.family: "Hack Nerd Font"
-                        font.pixelSize: 15
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
                     Text {
                         visible: battery.hasBat
                         text: {
@@ -622,6 +607,14 @@ Scope {
         id: bluetooth
         open: root.activePanel === "bt"
         screen: root.popScreen
+    }
+
+    TrayMenu {
+        open: root.activePanel === "tray"
+        screen: root.popScreen
+        item: root.trayItem
+        anchorX: root.trayX
+        onCloseRequested: root.closeAll()
     }
 
     AudioPanel {

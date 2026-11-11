@@ -11,6 +11,7 @@ Rectangle {
     readonly property bool accented: active && accent.a > 0
     readonly property color fg: accented ? accent : (active ? Colors.text : Colors.textDim)
     signal picked()
+    signal rightPicked()
 
     width: parent.width
     height: 34
@@ -61,6 +62,7 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: dr.picked()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => mouse.button === Qt.RightButton ? dr.rightPicked() : dr.picked()
     }
 }
