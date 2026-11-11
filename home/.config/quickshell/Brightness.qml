@@ -194,10 +194,12 @@ Scope {
         onFileChanged: reload()
     }
 
-    readonly property string mainName: {
-        try { return JSON.parse(monState.text()).mainName || ""; }
-        catch (e) { return ""; }
+    readonly property var monLayout: {
+        try { return JSON.parse(monState.text()); }
+        catch (e) { return {}; }
     }
+    readonly property string mainName: monLayout.mainName || ""
+    readonly property var aboveNames: monLayout.aboveNames || []
 
     Process {
         id: dispRead
@@ -487,14 +489,19 @@ Scope {
                 value: ""
             }
 
-            Row {
+            // D-pad: up places the monitor above main, left/right move it in its row
+            Grid {
                 id: posRow
                 visible: Quickshell.screens.length > 1
                 width: parent.width
+                columns: 3
                 spacing: 6
 
                 Repeater {
                     model: [
+                        { id: "" },
+                        { id: "up", label: "󰁝" },
+                        { id: "" },
                         { id: "left", label: "󰁍" },
                         { id: "main", label: "main" },
                         { id: "right", label: "󰁔" }
@@ -502,7 +509,10 @@ Scope {
 
                     Rectangle {
                         required property var modelData
-                        readonly property bool on: modelData.id === "main" && root.mainName === briCol.mon
+                        readonly property bool on: modelData.id === "main" ? root.mainName === briCol.mon
+                            : modelData.id === "up" && root.aboveNames.includes(briCol.mon)
+                        opacity: modelData.id === "" ? 0 : 1
+                        enabled: modelData.id !== ""
                         width: (briCol.width - 12) / 3
                         height: 32
                         radius: 0
@@ -512,7 +522,7 @@ Scope {
 
                         Text {
                             anchors.centerIn: parent
-                            text: modelData.label
+                            text: modelData.label ?? ""
                             color: parent.on ? Colors.text : Colors.textDim
                             font.family: "Hack Nerd Font"
                             font.pixelSize: 13
@@ -528,6 +538,8 @@ Scope {
                                 const id = parent.modelData.id;
                                 if (id === "main")
                                     root.display(["--main", briCol.mon]);
+                                else if (id === "up")
+                                    root.display(["--up", briCol.mon]);
                                 else
                                     root.display(["--move", briCol.mon, id === "left" ? "-1" : "1"]);
                             }

@@ -2,11 +2,13 @@
 # yunagi-display-scale MONITOR SCALE [RATE]   scale (and refresh rate) of one monitor
 # yunagi-display-scale --move MONITOR -1|1     move one monitor left or right in the order
 # yunagi-display-scale --main MONITOR          main monitor: workspace 1 and notifications
+# yunagi-display-scale --up MONITOR            toggle placing the monitor above the main one
 # yunagi-display-scale --apply                 re-lay out the connected monitors (hotplug)
 #
 # Monitors are remembered by description, so the settings follow the screen when
 # MST/dock connector names shift. Connected monitors are laid out edge to edge in
-# the saved order, without gaps for missing ones. State: monitors.json; Hyprland
+# the saved order, without gaps for missing ones; monitors marked "above" form a
+# second row centred over the main monitor. State: monitors.json; Hyprland
 # loads the generated monitors.lua at startup.
 import json, os, subprocess, sys
 
@@ -43,13 +45,18 @@ by_name = {m["name"]: m for m in mons}
 args = sys.argv[1:]
 if args and args[0] == "--move" and args[1] in by_name:
     k = key(by_name[args[1]])
-    present = [o for o in order if o in {key(m) for m in mons}]
+    up = screens[k].get("above", False)
+    present = [o for o in order if o in {key(m) for m in mons} and screens[o].get("above", False) == up]
     i = present.index(k) + int(args[2])
     if 0 <= i < len(present):
         a, b = order.index(k), order.index(present[i])
         order[a], order[b] = order[b], order[a]
 elif args and args[0] == "--main" and args[1] in by_name:
     main = key(by_name[args[1]])
+    screens[main]["above"] = False
+elif args and args[0] == "--up" and args[1] in by_name:
+    k = key(by_name[args[1]])
+    screens[k]["above"] = not screens[k].get("above", False) and k != main
 elif args and args[0] != "--apply" and args[0] in by_name:
     m = by_name[args[0]]
     s = screens[key(m)]
@@ -57,14 +64,36 @@ elif args and args[0] != "--apply" and args[0] in by_name:
     if len(args) > 2:
         s["mode"] = f'{m["width"]}x{m["height"]}@{float(args[2]):.2f}'
 
-lines, x, main_name = [], 0, ""
-for m in sorted(mons, key=lambda m: order.index(key(m))):
-    k = key(m)
-    s = screens[k]
+def size(m):
+    s = screens[key(m)]
     # A saved rate the current link cannot carry (e.g. 144 Hz over HDMI) falls back to the current mode
     mode = s["mode"] if s["mode"] + "Hz" in m["availableModes"] else f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}'
-    lines.append(f'hl.monitor({{ output = "{k}", mode = "{mode}", position = "{x}x0", scale = "{s["scale"]:g}" }})')
-    x += round(int(mode.split("x")[0]) / s["scale"])
+    w, h = mode.split("@")[0].split("x")
+    return mode, round(int(w) / s["scale"]), round(int(h) / s["scale"])
+
+
+ordered = sorted(mons, key=lambda m: order.index(key(m)))
+top = [m for m in ordered if screens[key(m)].get("above", False)]
+row = [m for m in ordered if m not in top]
+if not row:
+    row, top = top, []
+top_h = max((size(m)[2] for m in top), default=0)
+
+lines, pos, x, main_name, above_names = [], {}, 0, "", []
+for m in row:
+    pos[m["name"]] = (x, top_h)
+    x += size(m)[1]
+anchor = next((m for m in row if key(m) == main), row[0])
+top_w = sum(size(m)[1] for m in top)
+x = max(0, pos[anchor["name"]][0] + (size(anchor)[1] - top_w) // 2)
+for m in top:
+    pos[m["name"]] = (x, top_h - size(m)[2])
+    x += size(m)[1]
+    above_names.append(m["name"])
+for m in ordered:
+    k = key(m)
+    mode = size(m)[0]
+    lines.append(f'hl.monitor({{ output = "{k}", mode = "{mode}", position = "{pos[m["name"]][0]}x{pos[m["name"]][1]}", scale = "{screens[k]["scale"]:g}" }})')
     if k == main:
         main_name = m["name"]
 
@@ -72,7 +101,7 @@ hypr("eval", "\n".join(lines))
 
 os.makedirs(STATE, exist_ok=True)
 with open(JSON, "w") as f:
-    json.dump({"order": order, "main": main, "mainName": main_name, "screens": screens}, f, indent=1)
+    json.dump({"order": order, "main": main, "mainName": main_name, "aboveNames": above_names, "screens": screens}, f, indent=1)
 with open(LUA, "w") as f:
     rule = [f'hl.workspace_rule({{ workspace = "1", monitor = "{main}", default = true }})'] if main else []
     f.write("\n".join(lines + rule) + "\n")
