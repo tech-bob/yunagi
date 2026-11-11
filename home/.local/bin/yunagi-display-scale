@@ -14,7 +14,10 @@ for m in mons:
     s = scale if m["name"] == name else m["scale"]
     hz = rate if rate and m["name"] == name else m["refreshRate"]
     mode = f'{m["width"]}x{m["height"]}@{hz:.2f}'
-    lines.append(f'hl.monitor({{ output = "{m["name"]}", mode = "{mode}", position = "{x}x{m["y"]}", scale = "{s:g}" }})')
+    # desc: keeps the rule on the same screen when MST/dock connector names shift
+    unique = sum(n.get("description") == m.get("description") for n in mons) == 1
+    out = f'desc:{m["description"]}' if m.get("description") and unique else m["name"]
+    lines.append(f'hl.monitor({{ output = "{out}", mode = "{mode}", position = "{x}x{m["y"]}", scale = "{s:g}" }})')
     x += round(m["width"] / s)
 
 subprocess.run(["hyprctl", "eval", "\n".join(lines)], capture_output=True)
