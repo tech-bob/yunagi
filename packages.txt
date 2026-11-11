@@ -11,6 +11,7 @@ hyprshot
 xdg-desktop-portal-hyprland
 xdg-desktop-portal-gtk
 quickshell
+headsetcontrol
 polkit-gnome
 
 # Look
