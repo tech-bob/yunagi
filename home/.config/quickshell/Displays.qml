@@ -55,17 +55,17 @@ PanelWindow {
                 ? `${m.width}x${m.height}@${m.refreshRate}` : "preferred";
             return `hl.monitor({ output = ${JSON.stringify(m.name)}, mode = "${resolution}", position = "auto", scale = "${m.scale || 1}", disabled = false, mirror = ${JSON.stringify(mirror)} })`;
         };
-        const off = m => `hl.monitor({ output = ${JSON.stringify(m.name)}, disabled = true })`;
+        // Which monitors are on is saved by yunagi-display-scale, so it survives hotplug
+        const keep = mode === "extend" ? mons
+            : mode === "external" ? external
+            : mode.startsWith("only:") ? mons.filter(m => m.name === mode.slice(5))
+            : [];
+        if (keep.length) {
+            Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale", "--on", keep.map(m => m.name).join(",")]);
+            return;
+        }
         let lua = [];
-        if (mode === "extend")
-            lua = mons.map(m => on(m));
-        else if (mode === "external" && external.length)
-            lua = external.map(m => on(m)).concat(internal.map(off));
-        else if (mode.startsWith("only:")) {
-            const chosen = mons.find(m => m.name === mode.slice(5));
-            if (chosen)
-                lua = [on(chosen)].concat(mons.filter(m => m !== chosen).map(off));
-        } else if (mode === "mirror")
+        if (mode === "mirror")
             lua = [on(primary)].concat(mons.filter(m => m !== primary).map(m => on(m, primary.name)));
         if (lua.length)
             Quickshell.execDetached(["hyprctl", "eval", lua.join("; ")]);

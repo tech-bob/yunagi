@@ -204,6 +204,8 @@ Scope {
     }
     readonly property string mainName: monLayout.mainName || ""
     readonly property var aboveNames: monLayout.aboveNames || []
+    readonly property var offList: monLayout.off || []
+    readonly property var offNames: offList.map(o => o.name)
 
     Process {
         id: dispRead
@@ -256,7 +258,8 @@ Scope {
         Column {
             id: briCol
             readonly property string mon: root.picked || (root.screen ? root.screen.name : "")
-            readonly property bool hasBri: root.has(mon)
+            readonly property bool isOff: root.offNames.includes(mon)
+            readonly property bool hasBri: root.has(mon) && !isOff
             readonly property int bri: root.get(mon)
             anchors.left: parent.left
             anchors.right: parent.right
@@ -330,7 +333,7 @@ Scope {
                 readonly property real spanW: Math.max(...scr.map(sc => sc.x + sc.width)) - minX
                 readonly property real spanH: Math.max(...scr.map(sc => sc.y + sc.height)) - minY
                 readonly property real k: Math.min(width / Math.max(1, spanW), 110 / Math.max(1, spanH))
-                visible: scr.length > 1
+                visible: scr.length > 1 || root.offList.length > 0
                 width: parent.width
                 height: spanH * k
 
@@ -383,6 +386,75 @@ Scope {
                             onClicked: root.picked = mapMon.modelData.name
                         }
                     }
+                }
+            }
+
+            // Switched-off monitors: click to select, then turn on
+            Flow {
+                visible: root.offList.length > 0
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: root.offList
+
+                    Rectangle {
+                        id: offMon
+                        required property var modelData
+                        readonly property bool cur: modelData.name === briCol.mon
+                        width: offText.implicitWidth + 20
+                        height: 28
+                        radius: 0
+                        color: cur ? Qt.alpha(Colors.primary, 0.16) : (offMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                        border.color: cur ? Colors.primary : Colors.outlineVariant
+                        border.width: 1
+
+                        Text {
+                            id: offText
+                            anchors.centerIn: parent
+                            text: "󰶐 " + offMon.modelData.model + " · off"
+                            color: offMon.cur ? Colors.primary : Colors.textDim
+                            font.family: "Hack Nerd Font"
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                        }
+
+                        MouseArea {
+                            id: offMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.picked = offMon.modelData.name
+                        }
+                    }
+                }
+            }
+
+            // Off/on for the selected monitor; the last monitor on cannot be turned off
+            Rectangle {
+                visible: briCol.isOff || Quickshell.screens.length > 1
+                width: parent.width
+                height: 32
+                radius: 0
+                color: briCol.isOff ? Qt.alpha(Colors.primary, 0.16) : (pwrMouse.containsMouse ? Colors.surfaceContainerHigh : "transparent")
+                border.color: briCol.isOff ? Colors.primary : Colors.outlineVariant
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: briCol.isOff ? "󰍹  turn on" : "󰶐  turn off"
+                    color: briCol.isOff ? Colors.primary : Colors.textDim
+                    font.family: "Hack Nerd Font"
+                    font.pixelSize: 13
+                    font.weight: Font.Bold
+                }
+
+                MouseArea {
+                    id: pwrMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.display(["--power", briCol.mon])
                 }
             }
 
@@ -460,14 +532,16 @@ Scope {
                 }
             }
 
-            Divider {}
+            Divider { visible: !briCol.isOff }
 
             SectionHead {
+                visible: !briCol.isOff
                 label: "SCALE"
                 value: ""
             }
 
             Row {
+                visible: !briCol.isOff
                 width: parent.width
                 spacing: 6
 
@@ -552,10 +626,10 @@ Scope {
                 }
             }
 
-            Divider { visible: Quickshell.screens.length > 1 }
+            Divider { visible: Quickshell.screens.length > 1 && !briCol.isOff }
 
             SectionHead {
-                visible: Quickshell.screens.length > 1
+                visible: Quickshell.screens.length > 1 && !briCol.isOff
                 label: "POSITION"
                 value: ""
             }
@@ -563,7 +637,7 @@ Scope {
             // D-pad: up places the monitor above main, left/right move it in its row
             Grid {
                 id: posRow
-                visible: Quickshell.screens.length > 1
+                visible: Quickshell.screens.length > 1 && !briCol.isOff
                 width: parent.width
                 columns: 3
                 spacing: 6

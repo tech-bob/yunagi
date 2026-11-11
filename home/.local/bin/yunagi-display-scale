@@ -3,13 +3,15 @@
 # yunagi-display-scale --move MONITOR -1|1     move one monitor left or right (from above: down beside main)
 # yunagi-display-scale --main MONITOR          main monitor: workspace 1 and notifications
 # yunagi-display-scale --up MONITOR            toggle placing the monitor above the main one
+# yunagi-display-scale --power MONITOR         toggle a monitor off/on (never the last one on)
+# yunagi-display-scale --on MONITOR[,MONITOR]  exactly these monitors on, the rest off
 # yunagi-display-scale --apply                 re-lay out the connected monitors (hotplug)
 #
 # Monitors are remembered by description, so the settings follow the screen when
 # MST/dock connector names shift. Connected monitors are laid out edge to edge in
-# the saved order, without gaps for missing ones; monitors marked "above" form a
-# second row centred over the main monitor. State: monitors.json; Hyprland
-# loads the generated monitors.lua at startup.
+# the saved order, without gaps for missing or switched-off ones; monitors marked
+# "above" form a second row centred over the main monitor. State: monitors.json;
+# Hyprland loads the generated monitors.lua at startup.
 import json, os, subprocess, sys
 
 STATE = os.path.expanduser("~/.local/state/yunagi")
@@ -20,13 +22,18 @@ def hypr(*args):
     return subprocess.run(["hyprctl", *args], capture_output=True, text=True).stdout
 
 
-mons = [m for m in json.loads(hypr("monitors", "-j")) if m.get("mirrorOf", "none") == "none"]
-mons.sort(key=lambda m: m["x"])
+mons = sorted(json.loads(hypr("monitors", "all", "-j")), key=lambda m: m["x"])
+args = sys.argv[1:]
+cmd = args[0] if args else "--apply"
 
 
 def key(m):
     unique = sum(n.get("description") == m.get("description") for n in mons) == 1
     return f'desc:{m["description"]}' if m.get("description") and unique else m["name"]
+
+
+def cur_mode(m):
+    return f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}'
 
 
 try:
@@ -39,78 +46,111 @@ for m in mons:
     k = key(m)
     if k not in order:
         order.append(k)
-    screens.setdefault(k, {"mode": f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}', "scale": m["scale"]})
+    screens.setdefault(k, {"mode": cur_mode(m) if m["width"] else "preferred", "scale": m["scale"] or 1})
 
 by_name = {m["name"]: m for m in mons}
-args = sys.argv[1:]
-if args and args[0] == "--move" and args[1] in by_name and screens[key(by_name[args[1]])].get("above", False):
+keys = {key(m) for m in mons}
+
+
+def is_on(k):
+    return not screens[k].get("off", False)
+
+
+if cmd == "--move" and args[1] in by_name and screens[key(by_name[args[1]])].get("above", False):
     # From the top row: down next to the main monitor, on the chosen side
     k = key(by_name[args[1]])
     screens[k]["above"] = False
-    row_keys = [o for o in order if o in {key(m) for m in mons} and not screens[o].get("above", False) and o != k]
+    row_keys = [o for o in order if o in keys and is_on(o) and not screens[o].get("above", False) and o != k]
     ref = main if main in row_keys else (row_keys[0] if row_keys else None)
     if ref:
         order.remove(k)
         order.insert(order.index(ref) + (1 if args[2] == "1" else 0), k)
-elif args and args[0] == "--move" and args[1] in by_name:
+elif cmd == "--move" and args[1] in by_name:
     k = key(by_name[args[1]])
     up = screens[k].get("above", False)
-    present = [o for o in order if o in {key(m) for m in mons} and screens[o].get("above", False) == up]
+    present = [o for o in order if o in keys and is_on(o) and screens[o].get("above", False) == up]
     i = present.index(k) + int(args[2])
     if 0 <= i < len(present):
         a, b = order.index(k), order.index(present[i])
         order[a], order[b] = order[b], order[a]
-elif args and args[0] == "--main" and args[1] in by_name:
+elif cmd == "--main" and args[1] in by_name:
     main = key(by_name[args[1]])
     screens[main]["above"] = False
-elif args and args[0] == "--up" and args[1] in by_name:
+elif cmd == "--up" and args[1] in by_name:
     k = key(by_name[args[1]])
     screens[k]["above"] = not screens[k].get("above", False) and k != main
-elif args and args[0] != "--apply" and args[0] in by_name:
-    m = by_name[args[0]]
+elif cmd == "--power" and args[1] in by_name:
+    k = key(by_name[args[1]])
+    if is_on(k) and sum(is_on(o) for o in keys) > 1:
+        screens[k]["off"] = True
+    elif not is_on(k):
+        screens[k]["off"] = False
+elif cmd == "--on":
+    names = [n for n in args[1].split(",") if n in by_name]
+    if names:
+        for m in mons:
+            screens[key(m)]["off"] = m["name"] not in names
+elif cmd != "--apply" and cmd in by_name:
+    m = by_name[cmd]
     s = screens[key(m)]
     s["scale"] = float(args[1])
     if len(args) > 2:
         s["mode"] = f'{m["width"]}x{m["height"]}@{float(args[2]):.2f}'
 
+if not any(is_on(key(m)) for m in mons):
+    screens[key(mons[0])]["off"] = False
+
+
 def size(m):
     s = screens[key(m)]
     # A saved rate the current link cannot carry (e.g. 144 Hz over HDMI) falls back to the current mode
-    mode = s["mode"] if s["mode"] + "Hz" in m["availableModes"] else f'{m["width"]}x{m["height"]}@{m["refreshRate"]:.2f}'
+    if s["mode"] + "Hz" in m["availableModes"] or not m["width"]:
+        mode = s["mode"]
+    else:
+        mode = cur_mode(m)
+    if mode == "preferred":
+        return mode, round(1920 / s["scale"]), round(1080 / s["scale"])
     w, h = mode.split("@")[0].split("x")
     return mode, round(int(w) / s["scale"]), round(int(h) / s["scale"])
 
 
 ordered = sorted(mons, key=lambda m: order.index(key(m)))
-top = [m for m in ordered if screens[key(m)].get("above", False)]
-row = [m for m in ordered if m not in top]
+# Mirrored outputs are left to the display picker, except when it asks for an explicit set
+active = [m for m in ordered if is_on(key(m)) and (cmd == "--on" or m.get("mirrorOf", "none") == "none")]
+off = [m for m in ordered if not is_on(key(m))]
+top = [m for m in active if screens[key(m)].get("above", False)]
+row = [m for m in active if m not in top]
 if not row:
     row, top = top, []
 top_h = max((size(m)[2] for m in top), default=0)
 
-lines, pos, x, main_name, above_names = [], {}, 0, "", []
+pos, x = {}, 0
 for m in row:
     pos[m["name"]] = (x, top_h)
     x += size(m)[1]
-anchor = next((m for m in row if key(m) == main), row[0])
-top_w = sum(size(m)[1] for m in top)
-x = max(0, pos[anchor["name"]][0] + (size(anchor)[1] - top_w) // 2)
+if row:
+    anchor = next((m for m in row if key(m) == main), row[0])
+    x = max(0, pos[anchor["name"]][0] + (size(anchor)[1] - sum(size(m)[1] for m in top)) // 2)
 for m in top:
     pos[m["name"]] = (x, top_h - size(m)[2])
     x += size(m)[1]
-    above_names.append(m["name"])
-for m in ordered:
+
+lines = []
+for m in row + top:
     k = key(m)
-    mode = size(m)[0]
-    lines.append(f'hl.monitor({{ output = "{k}", mode = "{mode}", position = "{pos[m["name"]][0]}x{pos[m["name"]][1]}", scale = "{screens[k]["scale"]:g}" }})')
-    if k == main:
-        main_name = m["name"]
+    lines.append(f'hl.monitor({{ output = "{k}", mode = "{size(m)[0]}", position = "{pos[m["name"]][0]}x{pos[m["name"]][1]}", scale = "{screens[k]["scale"]:g}", disabled = false, mirror = "" }})')
+for m in off:
+    lines.append(f'hl.monitor({{ output = "{key(m)}", disabled = true }})')
 
 hypr("eval", "\n".join(lines))
 
+main_name = next((m["name"] for m in row + top if key(m) == main), "")
 os.makedirs(STATE, exist_ok=True)
 with open(JSON, "w") as f:
-    json.dump({"order": order, "main": main, "mainName": main_name, "aboveNames": above_names, "screens": screens}, f, indent=1)
+    json.dump({"order": order, "main": main, "mainName": main_name,
+               "aboveNames": [m["name"] for m in top],
+               "off": [{"name": m["name"], "model": m.get("model") or m["name"]} for m in off],
+               "screens": screens}, f, indent=1)
 with open(LUA, "w") as f:
     rule = [f'hl.workspace_rule({{ workspace = "1", monitor = "{main}", default = true }})'] if main else []
     f.write("\n".join(lines + rule) + "\n")
