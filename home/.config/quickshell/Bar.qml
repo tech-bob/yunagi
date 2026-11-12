@@ -56,12 +56,21 @@ Scope {
             : "hyprctl hyprsunset identity"]);
     }
 
+    // hyprsunset switches profiles on its own (07:00), so poll the state
     Process {
+        id: nightPoll
         command: ["hyprctl", "hyprsunset", "temperature"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: root.night = parseInt(text) < 6000
         }
+    }
+
+    Timer {
+        interval: 60000
+        running: true
+        repeat: true
+        onTriggered: nightPoll.running = true
     }
 
     IpcHandler {
