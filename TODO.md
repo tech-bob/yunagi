@@ -11,9 +11,14 @@
   (Omarchy installs in under a minute this way). This also makes every ISO
   offline.
 - **UEFI boot menu** of the ISO in Yunagi's look.
-- **AI user:** an optional account for AI agents, chosen in the installer and
-  kept apart from the admin: no sudo, a shared directory with the admin, and a
-  set of agent tools. To be designed before it is built.
+- **AI user:** `yunagi-ai`, run after install and reachable from the settings
+  menu (the tools need a network, so not in the installer). Creates an account
+  without sudo that shares the `delat` group and `/home/delat` with the admin,
+  installs Claude Code, Codex and Grok in that account's `~/.local` only, and
+  sets up the shared tmux (`tmuxdela`, `tmuxdelaw`) through which the admin lets
+  the agent in. The Hermes desktop app is a separate choice for the admin.
+- **Installer disk wipe:** erase any disk from the disk step, not only the
+  install disk, without dropping to the shell.
 - **Firewall tool:** open and close ports from a small TUI like the Packages
   tool, instead of editing `/etc/nftables.conf`.
 - **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
