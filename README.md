@@ -63,6 +63,8 @@ Optional flags (useful from the ISO chroot or scripts):
 | `Super+E` | File manager |
 | `Super+W` | Firefox |
 | `Super+Shift+F` | Float or tile the window |
+| `Super`+left drag | Move a floating window |
+| `Super`+right drag, `Super+Alt`+left drag | Resize a window (the second for touchpads) |
 | `Super+V` | Clipboard history |
 | `Super+B` | System information |
 | `Super+Y` | Packages |
