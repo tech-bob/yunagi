@@ -32,3 +32,6 @@
 - **Config layering:** Quickshell and the scripts run from
   `~/.local/share/yunagi`, like the Hyprland defaults; `~/.config` holds only
   the user's overrides, so updates no longer collide with copied files.
+- **Network tool:** a small TUI like the Packages tool, opened from the network
+  panel, for what the panel cannot do: static IP, DNS, VLAN, bridges, saved
+  connections. Replaces `nmtui`.

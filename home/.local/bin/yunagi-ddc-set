@@ -1,5 +1,10 @@
 #!/bin/sh
 # yunagi-ddc-set BUS VALUE — set DDC/CI brightness (VCP 0x10).
+# Some monitors drop the first message after idle; retry a few times.
 b=$1 v=$2
-i2ctransfer -y "$b" w7@0x37 0x51 0x84 0x03 0x10 $((v >> 8)) $((v & 255)) \
-    $((0x6e ^ 0x51 ^ 0x84 ^ 0x03 ^ 0x10 ^ (v >> 8) ^ (v & 255)))
+for i in 1 2 3; do
+    i2ctransfer -y "$b" w7@0x37 0x51 0x84 0x03 0x10 $((v >> 8)) $((v & 255)) \
+        $((0x6e ^ 0x51 ^ 0x84 ^ 0x03 ^ 0x10 ^ (v >> 8) ^ (v & 255))) 2>/dev/null && exit 0
+    sleep 0.05
+done
+exit 1
