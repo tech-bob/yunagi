@@ -8,7 +8,7 @@
     { "type": "cpu", "key": "│ ├ ", "showPeCoreCount": true, "keyColor": "blue" },
     { "type": "gpu", "key": "│ ├󰢮 ", "keyColor": "blue" },
     { "type": "display", "key": "│ ├󰍹 ", "keyColor": "blue" },
-    { "type": "disk", "key": "│ ├󰋊 ", "folders": "/", "keyColor": "blue" },
+    { "type": "disk", "key": "│ ├󰋊 {mountpoint}", "folders": "/:/home", "keyColor": "blue" },
     { "type": "memory", "key": "│ ├󰍛 ", "keyColor": "blue" },
     { "type": "swap", "key": "└ └󱃺 ", "keyColor": "blue" },
     { "type": "custom", "format": "\u001b[90m└────────────────────────────────────────────────────┘" },
