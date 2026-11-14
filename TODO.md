@@ -16,7 +16,13 @@
   without sudo that shares the `delat` group and `/home/delat` with the admin,
   installs Claude Code, Codex and Grok in that account's `~/.local` only, and
   sets up the shared tmux (`tmuxdela`, `tmuxdelaw`) through which the admin lets
-  the agent in. The Hermes desktop app is a separate choice for the admin.
+  the agent in. You pick which agents to install.
+- **Hermes desktop:** installed for the admin only when chosen in the settings
+  menu; never starts by itself.
+- **Agent usage in the bar:** quota left and pace per provider, like Omarchy's
+  Agents panel. A timer in the AI account writes the numbers to
+  `/home/delat/ai-usage.json`; the admin's bar only reads that file, so the
+  logins never leave the AI account.
 - **Installer disk wipe:** erase any disk from the disk step, not only the
   install disk, without dropping to the shell.
 - **Firewall tool:** open and close ports from a small TUI like the Packages
