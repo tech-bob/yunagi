@@ -644,6 +644,8 @@ run_step 96 100 "arch-chroot '$mnt' mkinitcpio -P" || fail "Could not build the 
 if [ -d "$offline_repo" ]; then
     printf '%s\n' "$mirrors" >"$mnt/etc/pacman.d/mirrorlist"
     sed -i "s/^SigLevel = Never/$siglevel/" "$mnt/etc/pacman.conf"
+    # The sync databases list only the ISO's packages; the first pacman -Sy fetches the real ones
+    rm -f "$mnt"/var/lib/pacman/sync/*.db
     umount "$mnt$offline_repo" && rmdir "$mnt$offline_repo" "$mnt/opt/yunagi" || true
 fi
 cp "$log" "$mnt/var/log/yunagi-install.log"
