@@ -207,13 +207,13 @@ Scope {
                 }
 
                 Item {
-                    visible: root.vpns.length > 0 && Networking.wifiEnabled
+                    visible: root.vpns.length > 0 && Networking.wifiEnabled && root.wifiDev !== null
                     width: 1
                     height: 8
                 }
 
                 SectionHead {
-                    visible: Networking.wifiEnabled
+                    visible: Networking.wifiEnabled && root.wifiDev !== null
                     label: "NETWORKS"
                     value: root.wifiNets.length > 0 ? "" : "scanning…"
                 }
