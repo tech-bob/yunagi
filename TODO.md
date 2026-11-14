@@ -18,3 +18,6 @@
   tool, instead of editing `/etc/nftables.conf`.
 - **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
   Danish).
+- **Config layering:** Quickshell and the scripts run from
+  `~/.local/share/yunagi`, like the Hyprland defaults; `~/.config` holds only
+  the user's overrides, so updates no longer collide with copied files.
