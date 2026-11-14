@@ -319,8 +319,8 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             KeyCode::Char('a') => {
                 app.aur_search = !app.aur_search;
                 save_aur_search(app.aur_search);
+                app.status.clear();
                 app.search();
-                app.status = if app.aur_search { "AUR in search".into() } else { "AUR left out of search".into() };
             }
             _ => {}
         }
@@ -500,7 +500,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         spans.extend(hint(k, d));
     }
     if app.aur {
-        spans.extend(hint("a", if app.aur_search { "AUR off" } else { "AUR on" }));
+        spans.extend(hint("a", "AUR search on/off"));
     } else {
         spans.extend(hint("a", "enable AUR"));
     }
