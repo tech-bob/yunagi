@@ -402,13 +402,15 @@ fn draw(f: &mut Frame, app: &mut App) {
             Span::from(format!(" {name} ")).dark_gray()
         }
     };
-    let aur = if app.aur && app.aur_search {
-        Span::from("AUR on").magenta()
-    } else {
+    let aur = if !app.aur {
         Span::from("AUR off").dark_gray()
+    } else if app.aur_search {
+        Span::from("AUR search on").magenta()
+    } else {
+        Span::from("AUR search off").dark_gray()
     };
     let [left, right] =
-        Layout::horizontal([Constraint::Fill(1), Constraint::Length(8)]).areas(header);
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(15)]).areas(header);
     f.render_widget(
         Line::from(vec![
             Span::from(if big { "" } else { "YUNAGI  " }).bold().fg(ACCENT),
@@ -500,7 +502,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         spans.extend(hint(k, d));
     }
     if app.aur {
-        spans.extend(hint("a", "AUR search on/off"));
+        spans.extend(hint("a", "AUR"));
     } else {
         spans.extend(hint("a", "enable AUR"));
     }
