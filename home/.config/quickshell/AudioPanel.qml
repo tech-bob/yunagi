@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Pipewire
 import Quickshell.Wayland
 import QtQuick
@@ -7,6 +8,21 @@ import QtQuick
 Scope {
     id: root
 
+    // HDMI/DP sinks keep their monitor names from probe time; the driver remaps
+    // pins on hotplug, so restart wireplumber to re-read them
+    Connections {
+        target: Quickshell
+        function onScreensChanged() {
+            sinkRescan.restart();
+        }
+    }
+
+    Timer {
+        id: sinkRescan
+        interval: 3000
+        onTriggered: Quickshell.execDetached(["systemctl", "--user", "restart", "wireplumber"])
+    }
+
     property bool open: false
     property var screen: null
     signal adjusted()
@@ -14,11 +30,76 @@ Scope {
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property int volPct: sink && sink.audio ? Math.round(sink.audio.volume * 100) : 0
     readonly property bool volMuted: sink && sink.audio ? sink.audio.muted : false
-    readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio)
+    // HDMI/DP sinks without a monitor name ([...]) have nothing connected
+    readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio
+        && !(/HDMI|DisplayPort/.test(n.description || "") && (n.description || "").indexOf("[") < 0))
     readonly property var mic: Pipewire.defaultAudioSource
     readonly property int micPct: mic && mic.audio ? Math.round(mic.audio.volume * 100) : 0
     readonly property bool micMuted: mic && mic.audio ? mic.audio.muted : false
     readonly property var mics: Pipewire.nodes.values.filter(n => !n.isSink && !n.isStream && n.audio && n.name.indexOf(".monitor") < 0)
+
+    // A GPU's HDMI/DP outputs are one card with one profile per monitor, so only
+    // the active one has a sink; the other connected monitors come from pactl
+    property var hdmiOthers: []
+    // Monitor name per active HDMI/DP sink; the node's own description can keep
+    // the previous monitor's name after a profile switch
+    property var hdmiNames: ({})
+
+    onOpenChanged: if (open) cardScan.running = true
+
+    Process {
+        id: cardScan
+        command: ["pactl", "-f", "json", "list", "cards"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const out = [];
+                const names = {};
+                try {
+                    for (const c of JSON.parse(text))
+                        for (const n in c.ports) {
+                            const p = c.ports[n];
+                            const prof = (p.profiles || []).find(x => /^output:hdmi-stereo(-extra\d+)?$/.test(x));
+                            if (p.type !== "HDMI" || p.availability !== "available" || !prof)
+                                continue;
+                            const o = { card: c.name, profile: prof, name: (p.properties || {})["device.product.name"] || p.description };
+                            if (prof === c.active_profile)
+                                names[root.sinkName(o)] = o.name;
+                            else
+                                out.push(o);
+                        }
+                } catch (e) {}
+                root.hdmiOthers = out;
+                root.hdmiNames = names;
+            }
+        }
+    }
+
+    Timer {
+        id: cardRescan
+        interval: 1500
+        onTriggered: cardScan.running = true
+    }
+
+    function sinkName(o) {
+        return o.card.replace("alsa_card.", "alsa_output.") + "." + o.profile.replace("output:", "");
+    }
+
+    function pickHdmi(o) {
+        Quickshell.execDetached(["sh", "-c", 'pactl set-card-profile "$1" "$2" && sleep 0.5 && pactl set-default-sink "$3"',
+            "sh", o.card, o.profile, root.sinkName(o)]);
+        // Show the switch at once: the picked monitor becomes the sink, the
+        // previous one on the same card moves to the list
+        const others = root.hdmiOthers.filter(x => x.card !== o.card || x.profile !== o.profile);
+        const prev = root.sink ? root.sink.name : "";
+        const prefix = o.card.replace("alsa_card.", "alsa_output.") + ".";
+        if (prev.startsWith(prefix) && root.hdmiNames[prev])
+            others.push({ card: o.card, profile: "output:" + prev.slice(prefix.length), name: root.hdmiNames[prev] });
+        const names = {};
+        names[root.sinkName(o)] = o.name;
+        root.hdmiNames = names;
+        root.hdmiOthers = others;
+        cardRescan.restart();
+    }
 
     function setMic(v) {
         if (mic && mic.audio)
@@ -185,9 +266,20 @@ Scope {
                     DevRow {
                         required property var modelData
                         icon: root.devIcon(modelData)
-                        label: modelData.nickname || modelData.description || modelData.name
+                        label: root.hdmiNames[modelData.name] || modelData.nickname || modelData.description || modelData.name
                         active: root.sink === modelData
                         onPicked: Pipewire.preferredDefaultAudioSink = modelData
+                    }
+                }
+
+                Repeater {
+                    model: root.hdmiOthers
+
+                    DevRow {
+                        required property var modelData
+                        icon: "󰍹"
+                        label: modelData.name
+                        onPicked: root.pickHdmi(modelData)
                     }
                 }
             }
