@@ -62,6 +62,7 @@ Optional flags (useful from the ISO chroot or scripts):
 | `Super+Ctrl+Space` | Settings menu |
 | `Super+E` | File manager |
 | `Super+W` | Firefox |
+| `Super+Shift+F` | Float or tile the window |
 | `Super+V` | Clipboard history |
 | `Super+B` | System information |
 | `Super+Y` | Packages |
