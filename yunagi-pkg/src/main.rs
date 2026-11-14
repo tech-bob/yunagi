@@ -36,6 +36,25 @@ struct App {
     stale: bool,
     status: String,
     aur: bool,
+    // Include the AUR in searches; toggled with `a` once paru is installed
+    aur_search: bool,
+}
+
+fn aur_state_file() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_default();
+    std::path::PathBuf::from(home).join(".local/state/yunagi/pkg-aur")
+}
+
+fn load_aur_search() -> bool {
+    std::fs::read_to_string(aur_state_file()).map_or(true, |s| s.trim() != "off")
+}
+
+fn save_aur_search(on: bool) {
+    let f = aur_state_file();
+    if let Some(d) = f.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(f, if on { "on\n" } else { "off\n" });
 }
 
 fn output(cmd: &str, args: &[&str]) -> String {
@@ -116,6 +135,7 @@ impl App {
             stale: false,
             status: String::new(),
             aur: has_paru(),
+            aur_search: load_aur_search(),
         };
         app.state.select_first();
         app.fetch_details();
@@ -165,7 +185,7 @@ impl App {
             return;
         }
         let mut res = parse_search(&output("pacman", &[&["-Ss"], &terms[..]].concat()));
-        if self.aur {
+        if self.aur && self.aur_search {
             res.extend(parse_search(&output("paru", &[&["-Ss", "--aur"], &terms[..]].concat())));
         }
         let q = terms.join("-").to_lowercase();
@@ -296,6 +316,12 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                 app.aur = has_paru();
                 app.status = if app.aur { "AUR enabled".into() } else { "AUR not enabled".into() };
             }
+            KeyCode::Char('a') => {
+                app.aur_search = !app.aur_search;
+                save_aur_search(app.aur_search);
+                app.search();
+                app.status = if app.aur_search { "AUR in search".into() } else { "AUR left out of search".into() };
+            }
             _ => {}
         }
     }
@@ -376,7 +402,7 @@ fn draw(f: &mut Frame, app: &mut App) {
             Span::from(format!(" {name} ")).dark_gray()
         }
     };
-    let aur = if app.aur {
+    let aur = if app.aur && app.aur_search {
         Span::from("AUR on").magenta()
     } else {
         Span::from("AUR off").dark_gray()
@@ -473,7 +499,9 @@ fn draw(f: &mut Frame, app: &mut App) {
     for (k, d) in [("tab", "switch"), ("q", "quit")] {
         spans.extend(hint(k, d));
     }
-    if !app.aur {
+    if app.aur {
+        spans.extend(hint("a", if app.aur_search { "AUR off" } else { "AUR on" }));
+    } else {
         spans.extend(hint("a", "enable AUR"));
     }
     spans.push(Span::from(app.status.clone()).dark_gray());
