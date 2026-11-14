@@ -12,6 +12,10 @@ Scope {
     property bool open: false
     property var screen: null
     property bool available: false
+    // Wireless mice/keyboards on a USB receiver (UPower, e.g. Logitech HID++)
+    readonly property var receivers: UPower.devices.values.filter(d => (d.type === UPowerDeviceType.Mouse || d.type === UPowerDeviceType.Keyboard) && d.isPresent && !d.nativePath.startsWith("/org/bluez"))
+    // Something to show without a Bluetooth adapter
+    readonly property bool hasReceivers: receivers.length + headsets.length > 0
     // Address of the paired device whose action rows are shown (right click)
     property string menuFor: ""
     onOpenChanged: menuFor = ""
@@ -43,6 +47,9 @@ Scope {
             }
         }
     }
+
+    // Once at start, so a headset-only machine still shows the bar icon
+    Component.onCompleted: hsProc.running = true
 
     Timer {
         interval: 60000
@@ -97,8 +104,6 @@ Scope {
             readonly property var paired: btPanel.devs.filter(d => d.paired || d.connected)
             readonly property var nearby: btPanel.devs.filter(d => !d.paired && !d.connected && d.name)
             readonly property int nConn: btPanel.devs.filter(d => d.connected).length
-            // Wireless mice/keyboards on a USB receiver (UPower, e.g. Logitech HID++)
-            readonly property var receiver: UPower.devices.values.filter(d => (d.type === UPowerDeviceType.Mouse || d.type === UPowerDeviceType.Keyboard) && d.isPresent && !d.nativePath.startsWith("/org/bluez"))
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
@@ -188,13 +193,13 @@ Scope {
             }
 
             SectionHead {
-                visible: btCol.receiver.length + root.headsets.length > 0
+                visible: root.receivers.length + root.headsets.length > 0
                 label: "RECEIVER"
                 value: ""
             }
 
             Column {
-                visible: btCol.receiver.length + root.headsets.length > 0
+                visible: root.receivers.length + root.headsets.length > 0
                 width: parent.width
                 spacing: 2
 
@@ -211,7 +216,7 @@ Scope {
                 }
 
                 Repeater {
-                    model: btCol.receiver
+                    model: root.receivers
 
                     DevRow {
                         required property var modelData

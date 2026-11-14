@@ -477,9 +477,11 @@ Scope {
                     }
 
                     Text {
-                        visible: bluetooth.available
+                        visible: bluetooth.available || bluetooth.hasReceivers
                         text: {
                             const a = Bluetooth.defaultAdapter;
+                            if (!bluetooth.available)
+                                return [bluetooth.receivers.length > 0 ? "󰍽" : "", bluetooth.headsets.length > 0 ? "󰋋" : ""].filter(x => x).join(" ");
                             if (!a || !a.enabled)
                                 return "󰂲";
                             return "󰂯";
