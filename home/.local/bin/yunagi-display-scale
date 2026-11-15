@@ -50,6 +50,10 @@ for m in mons:
 
 by_name = {m["name"]: m for m in mons}
 keys = {key(m) for m in mons}
+# Switched off lasts while connected; an unplugged monitor comes back on
+for k, s in screens.items():
+    if k not in keys:
+        s.pop("off", None)
 
 
 def is_on(k):

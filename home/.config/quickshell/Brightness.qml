@@ -179,6 +179,18 @@ Scope {
         }
     }
 
+    // Connector hotplug, including monitors that are switched off
+    Process {
+        running: true
+        command: ["udevadm", "monitor", "--udev", "--subsystem-match=drm"]
+        stdout: SplitParser {
+            onRead: line => {
+                if (line.endsWith("(drm)"))
+                    layoutTimer.restart();
+            }
+        }
+    }
+
     // Saved monitor order and main monitor (yunagi-display-scale); re-laid out on hotplug
     function display(args) {
         Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/yunagi-display-scale"].concat(args));
