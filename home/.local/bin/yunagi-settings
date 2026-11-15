@@ -125,17 +125,19 @@ DAY_PROFILE = "profile {\n    time = 07:00\n    temperature = 6000\n}\n"
 def read_night():
     text = SUNSET.read_text() if SUNSET.exists() else ""
     temps = [int(t) for t in re.findall(r"temperature\s*=\s*(\d+)", text) if int(t) != 6000]
-    auto = re.search(r"time\s*=\s*20:00", text)
-    return {"night_temperature": temps[0] if temps else 2750, "night_auto": bool(auto)}
+    starts = [t for t in re.findall(r"time\s*=\s*(\d\d:\d\d)", text) if t != "07:00"]
+    noted = re.search(r"night light from (\d\d:\d\d)", text)
+    start = starts[0] if starts else noted.group(1) if noted else "20:00"
+    return {"night_temperature": temps[0] if temps else 2750, "night_auto": bool(starts), "night_start": start}
 
 
 def write_night(night):
-    t = night["night_temperature"]
+    t, start = night["night_temperature"], night["night_start"]
     if night["night_auto"]:
-        text = (f"# Neutral by day, night light from 20:00; Super+T switches it by hand\n{DAY_PROFILE}\n"
-                f"profile {{\n    time = 20:00\n    temperature = {t}\n}}\n")
+        text = (f"# Neutral by day, night light from {start}; Super+T switches it by hand\n{DAY_PROFILE}\n"
+                f"profile {{\n    time = {start}\n    temperature = {t}\n}}\n")
     else:
-        text = f"# Neutral; Super+T switches the night light (temperature = {t})\n{DAY_PROFILE}"
+        text = f"# Neutral; Super+T switches the night light (temperature = {t}, night light from {start})\n{DAY_PROFILE}"
     SUNSET.write_text(text)
     subprocess.run(["pkill", "-u", str(os.getuid()), "-x", "hyprsunset"])
     time.sleep(0.2)
@@ -221,6 +223,11 @@ def set_other(key, raw):
         if not 1000 <= int(raw) <= 6000:
             raise ValueError("Choose a temperature between 1000 and 6000 K.")
         night[key] = int(raw)
+        write_night(night)
+    elif key == "night_start":
+        if not re.fullmatch(r"(1[2-9]|2[0-3]):[03]0", raw):
+            raise ValueError("Choose a time between 12:00 and 23:30.")
+        night[key] = raw
         write_night(night)
     elif key == "kb_layout":
         if not re.fullmatch(r"[a-z]{2,3}", raw):

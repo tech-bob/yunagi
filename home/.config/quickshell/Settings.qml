@@ -30,6 +30,7 @@ Scope {
     })[page] || ""
     // [label, value] lists for the choice page
     readonly property var minuteOptions: [1, 2, 5, 10, 15, 30, 60].map(n => [n + (n === 1 ? " minute" : " minutes"), n * 60])
+    readonly property var startOptions: ["17:00", "18:00", "19:00", "20:00", "21:00", "22:00"].map(t => [t, t])
     readonly property var tempOptions: [[ "Warm · 2500 K", 2500], ["2750 K", 2750], ["3000 K", 3000], ["3500 K", 3500], ["Mild · 4500 K", 4500]]
     readonly property var layoutOptions: [["Swedish", "se"], ["English (US)", "us"], ["English (UK)", "gb"], ["Norwegian", "no"],
                                           ["Danish", "dk"], ["Finnish", "fi"], ["German", "de"], ["French", "fr"], ["Spanish", "es"]]
@@ -70,7 +71,8 @@ Scope {
             { label: "Start after", key: "screensaver_seconds", kind: "choice", options: minuteOptions, value: minutes(settings.screensaver_seconds), disabled: !settings.screensaver_enabled },
             { label: "Lock after", key: "lock_seconds", kind: "choice", options: minuteOptions, value: minutes(settings.lock_seconds) },
             { label: "Turn screens off on lock", key: "screen_off_on_lock", kind: "toggle", value: settings.screen_off_on_lock ? "On" : "Off" },
-            { label: "Night light in the evening", detail: "20:00 to 07:00; Super+T switches it by hand", key: "night_auto", kind: "toggle", value: settings.night_auto ? "On" : "Off" },
+            { label: "Night light in the evening", detail: (settings.night_start || "20:00") + " to 07:00; Super+T switches it by hand", key: "night_auto", kind: "toggle", value: settings.night_auto ? "On" : "Off" },
+            { label: "Night light from", key: "night_start", kind: "choice", options: startOptions, value: settings.night_start || "—", disabled: !settings.night_auto },
             { label: "Night light temperature", key: "night_temperature", kind: "choice", options: tempOptions, value: settings.night_temperature ? settings.night_temperature + " K" : "—" },
             { label: "Preview screensaver", icon: "\uf04b", preview: true }
         ];

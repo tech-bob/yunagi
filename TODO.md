@@ -35,3 +35,5 @@
 - **Network tool:** a small TUI like the Packages tool, opened from the network
   panel, for what the panel cannot do: static IP, DNS, VLAN, bridges, saved
   connections. Replaces `nmtui`.
+- **Settings menu layout:** the root menu is cluttered; consider moving Settings
+  under System.
