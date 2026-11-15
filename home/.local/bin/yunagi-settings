@@ -118,14 +118,15 @@ def restart_idle():
 # --- Night light: ~/.config/hypr/hyprsunset.conf ------------------------------
 
 SUNSET = Path.home() / ".config/hypr/hyprsunset.conf"
-DAY_PROFILE = "profile {\n    time = 07:00\n    identity = true\n}\n"
+# 6000 K is neutral; a temperature (not identity) keeps `hyprctl hyprsunset temperature` truthful
+DAY_PROFILE = "profile {\n    time = 07:00\n    temperature = 6000\n}\n"
 
 
 def read_night():
     text = SUNSET.read_text() if SUNSET.exists() else ""
-    temp = re.search(r"temperature\s*=\s*(\d+)", text)
-    auto = re.search(r"^profile\s*\{[^}]*^\s*temperature", text, re.M)
-    return {"night_temperature": int(temp[1]) if temp else 2750, "night_auto": bool(auto)}
+    temps = [int(t) for t in re.findall(r"temperature\s*=\s*(\d+)", text) if int(t) != 6000]
+    auto = re.search(r"time\s*=\s*20:00", text)
+    return {"night_temperature": temps[0] if temps else 2750, "night_auto": bool(auto)}
 
 
 def write_night(night):

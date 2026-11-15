@@ -53,7 +53,7 @@ Scope {
         // Night temperature from hyprsunset.conf (set in the settings menu)
         Quickshell.execDetached(["sh", "-c", night
             ? 't=$(grep -o "temperature = [0-9]*" "$HOME/.config/hypr/hyprsunset.conf" | grep -o "[0-9]*$"); hyprctl hyprsunset temperature "${t:-2750}"'
-            : "hyprctl hyprsunset identity"]);
+            : "hyprctl hyprsunset temperature 6000"]);
     }
 
     // hyprsunset switches profiles on its own (07:00), so poll the state
