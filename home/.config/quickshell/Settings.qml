@@ -201,7 +201,7 @@ Scope {
             else if (row.system) Quickshell.execDetached(["kitty", "-e", "sh", "-c",
                 'SUDO_EDITOR=nvim sudoedit "$1" && sudo systemctl restart nftables || { echo; read -r -p "Press Return to close" _; }', "sh", row.system]);
             else if (row.file) Quickshell.execDetached(["kitty", "-e", "nvim", Quickshell.env("HOME") + "/" + row.file]);
-            else if (row.packages) Quickshell.execDetached(["kitty", "--class", "yunagi-pkg", "-o", "confirm_os_window_close=0", "-e", "yunagi-pkg"]);
+            else if (row.packages) Quickshell.execDetached(["kitty", "--class", "yunagi-pkg", "-o", "confirm_os_window_close=0", "-o", "window_padding_width=0", "-e", "yunagi-pkg"]);
             else Quickshell.execDetached(["qs", "ipc", "call", row.target, "toggle"]);
         }
     }

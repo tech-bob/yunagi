@@ -3,8 +3,12 @@ use std::io::{self, Write};
 use std::process::Command;
 use std::time::Duration;
 
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use ratatui::layout::{Constraint, Layout, Margin};
+use ratatui::crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton,
+    MouseEventKind,
+};
+use ratatui::crossterm::execute;
+use ratatui::layout::{Constraint, Layout, Margin, Position, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, List, ListItem, ListState, Padding, Paragraph, Wrap};
@@ -38,6 +42,9 @@ struct App {
     aur: bool,
     // Include the AUR in searches; toggled with `a` once paru is installed
     aur_search: bool,
+    // Close button, set by draw
+    close: Rect,
+    close_hover: bool,
 }
 
 fn aur_state_file() -> std::path::PathBuf {
@@ -136,6 +143,8 @@ impl App {
             status: String::new(),
             aur: has_paru(),
             aur_search: load_aur_search(),
+            close: Rect::default(),
+            close_hover: false,
         };
         app.state.select_first();
         app.fetch_details();
@@ -219,12 +228,14 @@ impl App {
 
 // Leaves the TUI, runs a command in the plain terminal so sudo/pacman can talk to the user.
 fn run_in_terminal(terminal: &mut DefaultTerminal, cmd: &str, args: &[&str]) -> io::Result<()> {
+    execute!(io::stdout(), DisableMouseCapture)?;
     ratatui::restore();
     let ok = Command::new(cmd).args(args).status().is_ok_and(|s| s.success());
     print!("\n{} — press Enter to return", if ok { "Done" } else { "Failed" });
     io::stdout().flush()?;
     io::stdin().read_line(&mut String::new())?;
     *terminal = ratatui::init();
+    execute!(io::stdout(), EnableMouseCapture)?;
     Ok(())
 }
 
@@ -233,7 +244,9 @@ const ENABLE_AUR: &str = "sudo pacman -S --needed base-devel git && d=$(mktemp -
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
+    execute!(io::stdout(), EnableMouseCapture)?;
     let res = run(&mut terminal);
+    execute!(io::stdout(), DisableMouseCapture)?;
     ratatui::restore();
     res
 }
@@ -246,7 +259,18 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             app.fetch_details();
             continue;
         }
-        let Event::Key(key) = event::read()? else { continue };
+        let key = match event::read()? {
+            Event::Key(key) => key,
+            Event::Mouse(m) => {
+                let over = app.close.contains(Position::new(m.column, m.row));
+                if over && m.kind == MouseEventKind::Down(MouseButton::Left) {
+                    return Ok(());
+                }
+                app.close_hover = over;
+                continue;
+            }
+            _ => continue,
+        };
         if key.kind != KeyEventKind::Press {
             continue;
         }
@@ -375,11 +399,13 @@ fn repo_color(repo: &str) -> Color {
 
 fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area().inner(Margin::new(1, 0));
+    let full = f.area();
+    app.close = Rect::new(full.right().saturating_sub(5), full.y, 5, 3);
     // Big banner when there is room
     let big = area.height >= 28;
     let [banner, header, search, body, footer] = Layout::vertical([
         Constraint::Length(if big { 8 } else { 0 }),
-        Constraint::Length(2),
+        Constraint::Length(if big { 2 } else { 3 }),
         Constraint::Length(if app.tab == Tab::Search { 3 } else { 0 }),
         Constraint::Fill(1),
         Constraint::Length(1),
@@ -410,7 +436,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         Span::from("AUR search off").dark_gray()
     };
     let [left, right] =
-        Layout::horizontal([Constraint::Fill(1), Constraint::Length(15)]).areas(header);
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(if big { 15 } else { 21 })]).areas(header);
     f.render_widget(
         Line::from(vec![
             Span::from(if big { "" } else { "YUNAGI  " }).bold().fg(ACCENT),
@@ -420,7 +446,19 @@ fn draw(f: &mut Frame, app: &mut App) {
         ]),
         left,
     );
-    f.render_widget(Line::from(aur).right_aligned(), right);
+    let aur_line = if big { Line::from(aur) } else { Line::from(vec![aur, Span::from("      ")]) };
+    f.render_widget(aur_line.right_aligned(), right);
+    let (frame, mark) = if app.close_hover {
+        (Style::new().fg(Color::Red), Style::new().fg(Color::Red).bold())
+    } else {
+        (Style::new().fg(Color::DarkGray), Style::new().fg(Color::Gray))
+    };
+    f.render_widget(
+        Paragraph::new(Span::styled("✕", mark))
+            .centered()
+            .block(Block::bordered().border_type(BorderType::Rounded).border_style(frame)),
+        app.close,
+    );
 
     // Search field
     if app.tab == Tab::Search {

@@ -282,7 +282,7 @@ hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("firefox"))
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("qs ipc call info toggle"))
 -- Packages: open, or close it if it is already open
-hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: yunagi-pkg$' && hyprctl dispatch "hl.dsp.window.close({window='class:yunagi-pkg'})" || kitty --class yunagi-pkg -o confirm_os_window_close=0 -e yunagi-pkg]]))
+hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: yunagi-pkg$' && hyprctl dispatch "hl.dsp.window.close({window='class:yunagi-pkg'})" || kitty --class yunagi-pkg -o confirm_os_window_close=0 -o window_padding_width=0 -e yunagi-pkg]]))
 -- Fullscreen (covers the bar), same key toggles back
 hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.float({ action = "toggle" }))
