@@ -15,9 +15,11 @@ Scope {
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property int volPct: sink && sink.audio ? Math.round(sink.audio.volume * 100) : 0
     readonly property bool volMuted: sink && sink.audio ? sink.audio.muted : false
-    // HDMI/DP sinks without a monitor name ([...]) have nothing connected
+    // HDMI/DP sinks are shown when their port is available (pactl) or they carry
+    // a monitor name ([...]); the others have nothing connected
     readonly property var sinks: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio
-        && !(/HDMI|DisplayPort/.test(n.description || "") && (n.description || "").indexOf("[") < 0))
+        && !(/HDMI|DisplayPort/.test(n.description || "") && (n.description || "").indexOf("[") < 0
+             && !root.hdmiPlugged[n.name] && n !== root.sink))
     readonly property var mic: Pipewire.defaultAudioSource
     readonly property int micPct: mic && mic.audio ? Math.round(mic.audio.volume * 100) : 0
     readonly property bool micMuted: mic && mic.audio ? mic.audio.muted : false
@@ -30,7 +32,43 @@ Scope {
     // the previous monitor's name after a profile switch
     property var hdmiNames: ({})
 
-    onOpenChanged: if (open) cardScan.running = true
+    // Sink names whose HDMI/DP port is available
+    property var hdmiPlugged: ({})
+
+    onOpenChanged: if (open) {
+        cardScan.running = true;
+        sinkScan.running = true;
+    }
+
+    Connections {
+        target: Quickshell
+        function onScreensChanged() {
+            sinkRescan.restart();
+        }
+    }
+
+    Timer {
+        id: sinkRescan
+        interval: 2000
+        onTriggered: sinkScan.running = true
+    }
+
+    Process {
+        id: sinkScan
+        running: true
+        command: ["pactl", "-f", "json", "list", "sinks"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const plugged = {};
+                try {
+                    for (const s of JSON.parse(text))
+                        if ((s.ports || []).some(p => p.availability === "available"))
+                            plugged[s.name] = true;
+                } catch (e) {}
+                root.hdmiPlugged = plugged;
+            }
+        }
+    }
 
     Process {
         id: cardScan
@@ -119,7 +157,7 @@ Scope {
     }
 
     PwObjectTracker {
-        objects: root.sinks.concat(root.mics)
+        objects: root.sinks.concat(root.mics, [root.sink, root.mic].filter(n => n))
     }
 
     PanelWindow {
