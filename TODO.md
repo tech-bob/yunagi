@@ -37,3 +37,5 @@
   connections. Replaces `nmtui`.
 - **Settings menu layout:** the root menu is cluttered; consider moving Settings
   under System.
+- **Launcher buttons:** a power button at the bottom right and a close button at
+  the top right.
