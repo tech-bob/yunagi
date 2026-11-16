@@ -8,21 +8,6 @@ import QtQuick
 Scope {
     id: root
 
-    // HDMI/DP sinks keep their monitor names from probe time; the driver remaps
-    // pins on hotplug, so restart wireplumber to re-read them
-    Connections {
-        target: Quickshell
-        function onScreensChanged() {
-            sinkRescan.restart();
-        }
-    }
-
-    Timer {
-        id: sinkRescan
-        interval: 3000
-        onTriggered: Quickshell.execDetached(["systemctl", "--user", "restart", "wireplumber"])
-    }
-
     property bool open: false
     property var screen: null
     signal adjusted()
