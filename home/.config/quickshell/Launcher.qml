@@ -48,7 +48,10 @@ Scope {
         if (!app)
             return;
         open = false;
-        app.execute();
+        if (app.runInTerminal)
+            Quickshell.execDetached(["kitty", "-e"].concat(app.command));
+        else
+            app.execute();
     }
 
     IpcHandler {
