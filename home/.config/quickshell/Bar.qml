@@ -52,7 +52,7 @@ Scope {
         night = !night;
         // Night temperature from hyprsunset.conf (set in the settings menu)
         Quickshell.execDetached(["sh", "-c", night
-            ? 't=$(grep -o "temperature = [0-9]*" "$HOME/.config/hypr/hyprsunset.conf" | grep -o "[0-9]*$"); hyprctl hyprsunset temperature "${t:-2750}"'
+            ? 't=$(grep -o "temperature = [0-9]*" "$HOME/.config/hypr/hyprsunset.conf" | grep -o "[0-9][0-9]*$" | sort -n | head -1); hyprctl hyprsunset temperature "${t:-2750}"'
             : "hyprctl hyprsunset temperature 6000"]);
     }
 
