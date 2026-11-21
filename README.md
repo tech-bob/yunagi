@@ -155,6 +155,8 @@ the TUI binary `yunagi-pkg`; full usage in [`docs/packages.md`](docs/packages.md
 |---|---|
 | `/` | Search |
 | `i` / `r` | Install / remove |
+| `u` / **Update** | Update everything: system, AUR and Yunagi |
+| `s` | Update the system with pacman only |
 | `Tab` | Switch between Installed and Search |
 | `1` / `2` | Jump to Installed / Search |
 | `j` / `k` | Move down / up |

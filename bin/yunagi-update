@@ -3,8 +3,9 @@
 #
 # ~/.local/share/yunagi becomes a git clone the first time (installs from the ISO have
 # no git): the old copy is kept beside it and install.sh runs once, backing up config
-# that differs. After that: git pull, new packages, the system files, config files that
-# are new in Yunagi (your own copies are left alone) and a restart of the bar.
+# that differs. After that: git pull, new packages, the system files, the packages tool
+# when it changed, config files that are new in Yunagi (your own copies are left
+# alone) and a restart of the bar.
 set -euo pipefail
 
 url=https://github.com/tech-bob/yunagi
@@ -62,6 +63,18 @@ if [ "$desktop" = yunagi ]; then
     sudo rm -rf /usr/share/sddm/themes/yunagi
     sudo cp -r sddm/yunagi /usr/share/sddm/themes/yunagi
     sudo install -Dm644 sddm/sddm.conf.d/yunagi.conf /etc/sddm.conf.d/yunagi.conf
+fi
+
+# The packages tool when its source changed; Rust stays only if it was already installed
+if ! git diff --quiet "$before" HEAD -- yunagi-pkg; then
+    say "Packages tool"
+    had_rust=$(pacman -Q rust 2>/dev/null || true)
+    sudo pacman -S --needed --noconfirm rust
+    build=$(mktemp -d)
+    CARGO_HOME="$build/cargo" cargo build --release --manifest-path yunagi-pkg/Cargo.toml --target-dir "$build/target"
+    sudo install -Dm755 "$build/target/release/yunagi-pkg" /usr/local/bin/yunagi-pkg
+    rm -rf "$build"
+    [ -n "$had_rust" ] || sudo pacman -Rns --noconfirm rust
 fi
 
 say "Config"

@@ -39,8 +39,8 @@ selected row appear in the right panel (`pacman -Qi` / `pacman -Si` /
 | `Esc` | Cancel typing, or quit when not typing |
 | `i` | Install the selected package if it is not installed |
 | `r` | Remove the selected installed package (`pacman -Rns`) |
-| `u` | Update all packages with pacman |
-| `p` | Update all packages with paru, AUR included (only when paru is installed) |
+| `u` or **Update** (top right) | Update everything: system and AUR (paru when installed, else pacman), then Yunagi (`yunagi-update`) |
+| `s` | Update the system with pacman only |
 | `Tab` | Toggle Installed ↔ Search |
 | `1` | Installed tab |
 | `2` | Search tab |
@@ -50,20 +50,20 @@ selected row appear in the right panel (`pacman -Qi` / `pacman -Si` /
 | `q` | Quit |
 | `Ctrl+C` | Quit |
 
-Footer hints mirror these: `/` search, `i` install, `r` remove, `u` update,
-`p` update with paru when available, `tab` switch, `q` quit, and `a` enable AUR
+Footer hints mirror these: `/` search, `i` install, `r` remove, `u` update all,
+`s` pacman only, `tab` switch, `q` quit, and `a` enable AUR
 when needed.
 
 ## Install, remove and update behaviour
 
-When you press `i`, `r`, `u` or `p`, the TUI exits to the plain terminal so sudo / pacman /
+When you press `i`, `r`, `u` or `s`, the TUI exits to the plain terminal so sudo / pacman /
 paru can prompt normally, then waits for Enter before restoring the UI.
 
 - **Official package:** `sudo pacman -S <name>`
 - **AUR package:** `paru -S <name>` (Search tab only, when AUR is on)
 - **Remove:** `sudo pacman -Rns <name>`
-- **Update all, official repos:** `sudo pacman -Syu`
-- **Update all, official repos and AUR:** `paru -Syu`
+- **Update all:** `paru -Syu` (or `sudo pacman -Syu` without paru), then `yunagi-update`
+- **Pacman only:** `sudo pacman -Syu`
 
 After success or failure the installed list (and the current search, if any) is
 refreshed.
