@@ -14,6 +14,12 @@
   redistribute, with credit in the README. The cat video and the other
   wallsflow clips are personal use only; the Death Star picture cannot ship.
   Milky way lake (Pexels, Wilson Mallmann) needs a credit if it ships.
+- **Desktop background in Settings:** a list of the pictures in
+  `~/Pictures/wallpapers`, like Lock screen → Background, that writes
+  `hyprpaper.conf`, restarts hyprpaper and runs matugen so the colours follow.
+  Today the picture is set by hand and matugen only runs at install.
+- **Hidden networks:** connect to a hidden SSID from the network panel
+  (name, security, password); today only nmcli or nm-connection-editor.
 - **Video desktop backgrounds:** mp4 as the desktop background, for desktops
   such as burken; on laptops only if the battery cost is small.
 - **btrfs and snapshots:** btrfs by default with subvolumes (`@`, `@home`, `@log`,
