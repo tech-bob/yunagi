@@ -39,7 +39,7 @@ selected row appear in the right panel (`pacman -Qi` / `pacman -Si` /
 | `Esc` | Cancel typing, or quit when not typing |
 | `i` | Install the selected package if it is not installed |
 | `r` | Remove the selected installed package (`pacman -Rns`) |
-| `u` or **Update** (top right) | Update everything: system and AUR (paru when installed, else pacman), then Yunagi (`yunagi-update`) |
+| `u` | Update everything: system and AUR (paru when installed, else pacman), then Yunagi (`yunagi-update`) |
 | `s` | Update the system with pacman only |
 | `Tab` | Toggle Installed ↔ Search |
 | `1` | Installed tab |

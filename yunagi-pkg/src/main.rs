@@ -42,11 +42,9 @@ struct App {
     aur: bool,
     // Include the AUR in searches; toggled with `a` once paru is installed
     aur_search: bool,
-    // Close and Update buttons, set by draw
+    // Close button, set by draw
     close: Rect,
     close_hover: bool,
-    update: Rect,
-    update_hover: bool,
 }
 
 fn aur_state_file() -> std::path::PathBuf {
@@ -147,8 +145,6 @@ impl App {
             aur_search: load_aur_search(),
             close: Rect::default(),
             close_hover: false,
-            update: Rect::default(),
-            update_hover: false,
         };
         app.state.select_first();
         app.fetch_details();
@@ -271,19 +267,11 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         let key = match event::read()? {
             Event::Key(key) => key,
             Event::Mouse(m) => {
-                let at = Position::new(m.column, m.row);
-                let click = m.kind == MouseEventKind::Down(MouseButton::Left);
-                app.close_hover = app.close.contains(at);
-                app.update_hover = app.update.contains(at);
-                if click && app.close_hover {
+                let over = app.close.contains(Position::new(m.column, m.row));
+                if over && m.kind == MouseEventKind::Down(MouseButton::Left) {
                     return Ok(());
                 }
-                if click && app.update_hover {
-                    app.update_hover = false;
-                    run_in_terminal(terminal, "bash", &["-c", UPDATE_ALL])?;
-                    app.aur = has_paru();
-                    app.refresh();
-                }
+                app.close_hover = over;
                 continue;
             }
             _ => continue,
@@ -419,7 +407,6 @@ fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area().inner(Margin::new(1, 0));
     let full = f.area();
     app.close = Rect::new(full.right().saturating_sub(5), full.y, 5, 3);
-    app.update = Rect::new(full.right().saturating_sub(17), full.y, 12, 3);
     // Big banner when there is room
     let big = area.height >= 28;
     let [banner, header, search, body, footer] = Layout::vertical([
@@ -455,7 +442,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         Span::from("AUR search off").dark_gray()
     };
     let [left, right] =
-        Layout::horizontal([Constraint::Fill(1), Constraint::Length(if big { 15 } else { 33 })]).areas(header);
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(if big { 15 } else { 21 })]).areas(header);
     f.render_widget(
         Line::from(vec![
             Span::from(if big { "" } else { "YUNAGI  " }).bold().fg(ACCENT),
@@ -465,7 +452,7 @@ fn draw(f: &mut Frame, app: &mut App) {
         ]),
         left,
     );
-    let aur_line = if big { Line::from(aur) } else { Line::from(vec![aur, Span::from(" ".repeat(18))]) };
+    let aur_line = if big { Line::from(aur) } else { Line::from(vec![aur, Span::from("      ")]) };
     f.render_widget(aur_line.right_aligned(), right);
     let (frame, mark) = if app.close_hover {
         (Style::new().fg(Color::Red), Style::new().fg(Color::Red).bold())
@@ -477,18 +464,6 @@ fn draw(f: &mut Frame, app: &mut App) {
             .centered()
             .block(Block::bordered().border_type(BorderType::Rounded).border_style(frame)),
         app.close,
-    );
-
-    let (frame, label) = if app.update_hover {
-        (Style::new().fg(ACCENT), Style::new().fg(ACCENT).bold())
-    } else {
-        (Style::new().fg(Color::DarkGray), Style::new().fg(Color::Gray))
-    };
-    f.render_widget(
-        Paragraph::new(Span::styled("⟳ Update", label))
-            .centered()
-            .block(Block::bordered().border_type(BorderType::Rounded).border_style(frame)),
-        app.update,
     );
 
     // Search field
