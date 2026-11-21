@@ -54,7 +54,7 @@ local menu        = "qs ipc call launcher toggle"
 hl.on("hyprland.start", function ()
   hl.exec_cmd("systemctl --user import-environment QT_QPA_PLATFORM QT_QPA_PLATFORMTHEME GTK_THEME WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
   hl.exec_cmd("systemctl --user stop hyprpolkitagent")
-  hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
+  -- The password prompt (polkit agent) is Quickshell's own, PolkitPrompt.qml
   hl.exec_cmd("hyprpaper")
   hl.exec_cmd("hypridle")
   hl.exec_cmd("hyprsunset")
@@ -273,20 +273,20 @@ hl.device({
 local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
-hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
-local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
+hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal), { description = "Terminal" })
+local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close(), { description = "Close window" })
 -- closeWindowBind:set_enabled(false)
-hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
-hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call power toggle"))
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("firefox"))
-hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("qs ipc call info toggle"))
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"), { description = "Lock screen" })
+hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call power toggle"), { description = "Power menu" })
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager), { description = "Files" })
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("firefox"), { description = "Browser" })
+hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("qs ipc call info toggle"), { description = "System information" })
 -- Packages: open, or close it if it is already open
-hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: yunagi-pkg$' && hyprctl dispatch "hl.dsp.window.close({window='class:yunagi-pkg'})" || kitty --class yunagi-pkg -o confirm_os_window_close=0 -o window_padding_width=0 -e yunagi-pkg]]))
+hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: yunagi-pkg$' && hyprctl dispatch "hl.dsp.window.close({window='class:yunagi-pkg'})" || kitty --class yunagi-pkg -o confirm_os_window_close=0 -o window_padding_width=0 -e yunagi-pkg]]), { description = "Packages" })
 -- Fullscreen (covers the bar), same key toggles back
-hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
-hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.float({ action = "toggle" }))
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call clipboard toggle"))
+hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen(), { description = "Fullscreen" })
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.float({ action = "toggle" }), { description = "Float or tile window" })
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs ipc call clipboard toggle"), { description = "Clipboard history" })
 
 -- Maximize (bar visible), toggle
 hl.bind(mainMod .. " + Page_Up", function ()
@@ -294,82 +294,89 @@ hl.bind(mainMod .. " + Page_Up", function ()
     if not w then return end
     local internal = (w.fullscreen_mode == 1) and 0 or 1
     hl.dispatch(hl.dsp.window.fullscreen_state({ internal = internal, client = -1 }))
-end)
+end, { description = "Maximize window" })
 
 -- Switch workspace (Omarchy)
-hl.bind(mainMod .. " + Tab",          hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + SHIFT + Tab",  hl.dsp.focus({ workspace = "e-1" }))
-hl.bind(mainMod .. " + CTRL + Tab",   hl.dsp.focus({ workspace = "previous" }))
+hl.bind(mainMod .. " + Tab",          hl.dsp.focus({ workspace = "e+1" }), { description = "Next workspace" })
+hl.bind(mainMod .. " + SHIFT + Tab",  hl.dsp.focus({ workspace = "e-1" }), { description = "Previous workspace" })
+hl.bind(mainMod .. " + CTRL + Tab",   hl.dsp.exec_cmd("qs ipc call windowmap toggle"), { description = "Window map" })
+hl.bind(mainMod .. " + ALT + Tab",    hl.dsp.focus({ workspace = "previous" }), { description = "Last workspace" })
 
 -- Move windows in the layout
-hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.swap({ direction = "left" }))
-hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.swap({ direction = "right" }))
-hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.swap({ direction = "up" }))
-hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.swap({ direction = "down" }))
-hl.bind(mainMod .. " + Space", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + CTRL + Space", hl.dsp.exec_cmd("qs ipc call settings toggle"))
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
-hl.bind(mainMod .. " + J", hl.dsp.layout("colresize +conf"))  -- scrolling: next column width
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.swap({ direction = "left" }), { description = "Move window left" })
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.swap({ direction = "right" }), { description = "Move window right" })
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.swap({ direction = "up" }), { description = "Move window up" })
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.swap({ direction = "down" }), { description = "Move window down" })
+hl.bind(mainMod .. " + Space", hl.dsp.exec_cmd(menu), { description = "Apps" })
+hl.bind(mainMod .. " + CTRL + Space", hl.dsp.exec_cmd("qs ipc call settings toggle"), { description = "Menu" })
+hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("qs ipc call settings keybinds"), { description = "Keybinds" })
+hl.bind("Control_L", function ()
+    local pointer = hl.get_cursor_pos()
+    hl.exec_cmd(("qs ipc call cursorlocator tap %d %d"):format(math.floor(pointer.x), math.floor(pointer.y)))
+end, { release = true, non_consuming = true, description = "Find cursor (double tap)" })
+hl.bind(mainMod .. " + U", hl.dsp.exec_cmd("qs ipc call aiusage toggle"), { description = "AI usage" })
+hl.bind(mainMod .. " + P", hl.dsp.window.pseudo(), { description = "Pseudo-tile window" })
+hl.bind(mainMod .. " + J", hl.dsp.layout("colresize +conf"), { description = "Next column width" })  -- scrolling: next column width
 
 -- Move focus with mainMod + arrow keys
-hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
-hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
-hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
-hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }), { description = "Focus left" })
+hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }), { description = "Focus right" })
+hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }), { description = "Focus up" })
+hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }), { description = "Focus down" })
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
 for i = 1, 10 do
     local key = i % 10 -- 10 maps to key 0
-    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
-    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
-    hl.bind(mainMod .. " + SHIFT + ALT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
+    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}), { description = "Workspace " .. i })
+    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }), { description = "Move window to workspace " .. i })
+    hl.bind(mainMod .. " + SHIFT + ALT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }), { description = "Send window to workspace " .. i .. ", stay" })
 end
 
 -- Monitors (from Omarchy default/hypr/bindings/tiling.lua)
-hl.bind(mainMod .. " + SHIFT + ALT + left",  hl.dsp.workspace.move({ monitor = "l" }))
-hl.bind(mainMod .. " + SHIFT + ALT + right", hl.dsp.workspace.move({ monitor = "r" }))
-hl.bind(mainMod .. " + SHIFT + ALT + up",    hl.dsp.workspace.move({ monitor = "u" }))
-hl.bind(mainMod .. " + SHIFT + ALT + down",  hl.dsp.workspace.move({ monitor = "d" }))
-hl.bind("XF86Display",              hl.dsp.exec_cmd("qs ipc call display toggle"))
-hl.bind("CTRL + ALT + Tab",         hl.dsp.focus({ monitor = "+1" }))
-hl.bind("CTRL + ALT + SHIFT + Tab", hl.dsp.focus({ monitor = "-1" }))
+hl.bind(mainMod .. " + SHIFT + ALT + left",  hl.dsp.workspace.move({ monitor = "l" }), { description = "Workspace to the left monitor" })
+hl.bind(mainMod .. " + SHIFT + ALT + right", hl.dsp.workspace.move({ monitor = "r" }), { description = "Workspace to the right monitor" })
+hl.bind(mainMod .. " + SHIFT + ALT + up",    hl.dsp.workspace.move({ monitor = "u" }), { description = "Workspace to the monitor above" })
+hl.bind(mainMod .. " + SHIFT + ALT + down",  hl.dsp.workspace.move({ monitor = "d" }), { description = "Workspace to the monitor below" })
+hl.bind("XF86Display",              hl.dsp.exec_cmd("qs ipc call display toggle"), { description = "Display panel" })
+hl.bind("CTRL + ALT + Tab",         hl.dsp.focus({ monitor = "+1" }), { description = "Next monitor" })
+hl.bind("CTRL + ALT + SHIFT + Tab", hl.dsp.focus({ monitor = "-1" }), { description = "Previous monitor" })
 
 -- Scratchpad
-hl.bind(mainMod .. " + A",         hl.dsp.workspace.toggle_special("magic"))
-hl.bind(mainMod .. " + SHIFT + A", hl.dsp.window.move({ workspace = "special:magic" }))
+hl.bind(mainMod .. " + A",         hl.dsp.workspace.toggle_special("magic"), { description = "Scratchpad" })
+hl.bind(mainMod .. " + SHIFT + A", hl.dsp.window.move({ workspace = "special:magic" }), { description = "Move window to scratchpad" })
 
 -- Night light toggle (self-healing, no state file)
-hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("qs ipc call night toggle"))
+hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("qs ipc call night toggle"), { description = "Night light" })
 
 -- Screenshots (shutter via yunagi-screenshot)
-hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot region"))
-hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region"))
-hl.bind(mainMod .. " + PRINT",     hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot output"))
+hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot region"), { description = "Screenshot of a region" })
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region"), { description = "Screenshot of a region with hyprshot" })
+hl.bind(mainMod .. " + PRINT",     hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot output"), { description = "Screenshot of the screen" })
 
 -- Scroll through existing workspaces with mainMod + scroll
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }), { description = "Next workspace" })
+hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }), { description = "Previous workspace" })
 
 -- Move/resize windows with mainMod + LMB/RMB and dragging
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
-hl.bind(mainMod .. " + ALT + mouse:272", hl.dsp.window.resize(), { mouse = true })  -- touchpad
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { description = "Move window (drag)", mouse = true })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { description = "Resize window (drag)", mouse = true })
+hl.bind(mainMod .. " + ALT + mouse:272", hl.dsp.window.resize(), { description = "Resize window (drag, touchpad)", mouse = true })  -- touchpad
 
 -- Laptop multimedia keys → wpctl/brightnessctl (OSD drawn by Quickshell)
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 2%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"),        { locked = true, repeating = true })
-hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),       { locked = true })
-hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),     { locked = true })
-hl.bind("XF86MonBrightnessUp",  hl.dsp.exec_cmd("qs ipc call brightness up"),                      { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown",hl.dsp.exec_cmd("qs ipc call brightness down"),                    { locked = true, repeating = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 2%+"), { description = "Volume up", locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"),        { description = "Volume down", locked = true, repeating = true })
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),       { description = "Mute", locked = true })
+hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),     { description = "Mute microphone", locked = true })
+hl.bind("XF86MonBrightnessUp",  hl.dsp.exec_cmd("qs ipc call brightness up"),                      { description = "Brightness up", locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown",hl.dsp.exec_cmd("qs ipc call brightness down"),                    { description = "Brightness down", locked = true, repeating = true })
 
 -- Play/pause/next need playerctl, which is not installed, so no bindings for them.
 
 
-hl.bind("Print",         hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot region"))
-hl.bind("CTRL + Print",  hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot output"))
-hl.bind("SHIFT + Print", hl.dsp.exec_cmd("hyprshot -m window --clipboard-only"))
+hl.bind("Print",         hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot region"), { description = "Screenshot of a region" })
+hl.bind("CTRL + Print",  hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot output"), { description = "Screenshot of the screen" })
+hl.bind("SHIFT + Print", hl.dsp.exec_cmd("hyprshot -m window --clipboard-only"), { description = "Screenshot of a window to the clipboard" })
 
 
 --------------------------------
@@ -443,6 +450,23 @@ hl.window_rule({
     float  = true,
     center = true,
     size   = "1100 760",
+})
+
+-- Network connections (More settings… in the network panel): dialogs, not tiles
+hl.window_rule({
+    name   = "nm-connection-editor",
+    match  = { class = "nm-connection-editor", title = "Network Connections" },
+    float  = true,
+    center = true,
+    size   = "760 560",
+})
+
+hl.window_rule({
+    name   = "nm-connection-editor-edit",
+    match  = { class = "nm-connection-editor", title = "^Editing .*" },
+    float  = true,
+    center = true,
+    size   = "880 660",
 })
 
 hl.window_rule({

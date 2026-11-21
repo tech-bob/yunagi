@@ -12,6 +12,7 @@ Scope {
     readonly property var screen: popupTarget.screen
     property string query: ""
     property var entries: []
+    readonly property bool swedish: /^sv(?:[-_]|$)/i.test(Qt.locale().uiLanguages[0] || "")
 
     readonly property var shown: {
         const q = query.trim().toLowerCase();
@@ -27,12 +28,13 @@ Scope {
             return;
         query = "";
         list.currentIndex = 0;
-        load.running = true;
+        if (!wipe.running)
+            load.running = true;
         open = true;
     }
 
     function pick(e) {
-        if (!e)
+        if (!e || wipe.running || load.running)
             return;
         open = false;
         Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | cliphist decode | wl-copy", "sh", e.line]);
@@ -56,6 +58,22 @@ Scope {
                     return { line: l, text: t, image: t.startsWith("[[ binary data") };
                 });
             }
+        }
+    }
+
+    Process {
+        id: wipe
+        command: ["cliphist", "wipe"]
+        onExited: code => {
+            if (code === 0) {
+                root.entries = [];
+                root.query = "";
+            } else {
+                Quickshell.execDetached(["notify-send", "-a", "Yunagi",
+                    root.swedish ? "Urklippshistorik" : "Clipboard history",
+                    root.swedish ? "Kunde inte rensa historiken." : "Could not clear history."]);
+            }
+            load.running = true;
         }
     }
 
@@ -152,20 +170,22 @@ Scope {
                     font.pixelSize: 20
                 }
 
-                Text {
-                    id: glyph
+                CapButton {
+                    id: clearButton
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: ""
-                    color: Colors.primary
-                    font.family: "Hack Nerd Font"
-                    font.pixelSize: 18
+                    width: 150
+                    radius: 8
+                    label: root.swedish ? "Rensa historik" : "Clear history"
+                    enabled: root.entries.length > 0 && !load.running && !wipe.running
+                    opacity: enabled ? 1 : 0.45
+                    onClicked: wipe.running = true
                 }
 
                 TextInput {
                     id: input
                     anchors.left: parent.left
-                    anchors.right: glyph.left
+                    anchors.right: clearButton.left
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.query

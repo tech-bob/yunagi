@@ -38,9 +38,13 @@ cd yunagi
 ```
 
 It asks for a desktop: **yunagi** (Hyprland with the Yunagi shell), **gnome**
-(GNOME with a lean set of apps) or **minimal** (only NetworkManager). Yunagi is
-kept in `~/.local/share/yunagi`; the files in `~/.config` are ordinary copies that
-you own, and conflicting files are moved to `~/.yunagi-backup-<date>`.
+(GNOME with a lean set of apps) or **minimal** (only NetworkManager).
+
+Yunagi is kept in `~/.local/share/yunagi`, and the bar and menus (Quickshell), the
+Hyprland defaults and the `yunagi-*` scripts run from there, so an update only
+replaces that folder. `~/.config/quickshell` and the scripts in `~/.local/bin` are
+links into it. The rest of `~/.config` (kitty, fish, nvim, GTK, matugen) are
+copies you own; files they replace are moved to `~/.yunagi-backup-<date>`.
 
 Optional flags (useful from the ISO chroot or scripts):
 
@@ -59,7 +63,9 @@ Optional flags (useful from the ISO chroot or scripts):
 |---|---|
 | `Super+Return` | Terminal |
 | `Super+Space` | Launcher |
-| `Super+Ctrl+Space` | Settings menu |
+| `Super+Ctrl+Space` | Menu |
+| `Super+K` | Keybinds |
+| `Super+U` | AI usage |
 | `Super+E` | File manager |
 | `Super+W` | Firefox |
 | `Super+Shift+F` | Float or tile the window |
@@ -75,20 +81,58 @@ Optional flags (useful from the ISO chroot or scripts):
 | `Super+J` | Toggle half/full column width |
 | `Super+C` | Close window |
 | `Super+1–0` | Workspace (`+Shift` moves the window) |
-| `Print` | Screenshot of a region |
+| `Super+Ctrl+Tab` | Window map: every workspace and its windows |
+| `Super+A` | Scratchpad (`+Shift` moves the window there) |
+| `Super+S`, `Print` | Screenshot of a region (`Ctrl+Print`: the screen) |
 
-## Settings
+Every bind is listed in the menu under Settings → Keybinds (`Super+K`).
 
-The settings menu (`Super+Ctrl+Space`) changes the screensaver, locking, night
-light, keyboard, mouse and touchpad, and the git name and email. Config opens the
-config files in nvim.
+## Menu
+
+`Super+Ctrl+Space`, or a click on the mark in the bar.
+
+| Page | What is on it |
+|---|---|
+| Apps | The app launcher (`Super+Space`) |
+| Packages | The Packages tool |
+| AI | The AI account's agents, AI usage, Grok Bot and Hermes, the shared terminal |
+| Settings | Screen, lock screen, menu size, the mark; keyboard, mouse & touchpad, keybinds; git, SSH |
+| System | Audio, display, Bluetooth, network; system information, config files |
+
+Esc goes back; the buttons in the corners close the menu and open the power menu.
+The panels in the bar (audio, network and so on) close with Esc or a click beside
+them.
 
 Your own Hyprland lines go in `~/.config/hypr/hyprland.lua`, below the line that
 loads Yunagi's defaults; they win over the defaults.
 
+## AI
+
+Menu → AI sets up an AI account without sudo, which shares `/home/delat` with you.
+Claude Code, Codex and Grok install and sign in there, in a terminal the menu
+opens, so their logins never reach your account. The same page installs Grok Bot
+and Hermes (from the AUR) and the shared terminal (`tmuxdela`, `tmuxdelaw`) through
+which you let an agent into your tmux.
+
+The robot right of the clock shows how much of each plan is used; it turns yellow
+from 70 % and red from 90 % of the most used limit. A click or `Super+U` opens
+every window with its reset time, and Menu → AI → Usage shows the same. A timer
+reads the numbers every 5 minutes; only the percentages leave the AI account.
+
+## Network
+
+The network panel in the bar connects to Wi-Fi and VPNs. The network you are on
+is at the top; a click on it sets IPv4 (automatic or manual) and DNS. More
+settings…, and Menu → System → Network, open NetworkManager's connection editor.
+
+## Password prompt
+
+When something needs the admin password (polkit), Yunagi asks for it in its own
+prompt over the whole screen. Enter confirms, Esc cancels.
+
 ## Packages
 
-Settings menu → Packages, or **Packages** among the apps in GNOME. The tool is
+Menu → Packages (`Super+Y`), or **Packages** among the apps in GNOME. The tool is
 the TUI binary `yunagi-pkg`; full usage in [`docs/packages.md`](docs/packages.md).
 
 | Key | Action |
@@ -118,15 +162,16 @@ documented in [`branding/BRAND.md`](branding/BRAND.md); the locked mark is
 With automatic login, the first app that needs gnome-keyring asks for a password
 for a new keyring: leave it empty and it stays unlocked from then on.
 
-The SSH agent is gcr-ssh-agent. Add keys with `ssh-add`, or `AddKeysToAgent yes`
-in `~/.ssh/config`.
+The SSH agent (gcr-ssh-agent) is off until you turn it on under Menu → Settings →
+SSH; it is per user and asks for key passphrases in a window. Add keys with
+`ssh-add`, or `AddKeysToAgent yes` in `~/.ssh/config`. The same page makes a new
+ed25519 key and prints its public half.
 
 ## Firewall
 
 nftables is on from the start: incoming connections are dropped except replies
-and ping, SSH included; outgoing traffic is open. Settings menu →
-System → Config → Firewall opens `/etc/nftables.conf` and reloads it after
-saving. To open a port, add a line to the `input` chain:
+and ping, SSH included; outgoing traffic is open. Menu → System → Config →
+Firewall opens `/etc/nftables.conf` and reloads it after saving. To open a port, add a line to the `input` chain:
 
 ```
 tcp dport 53317 accept
@@ -135,7 +180,8 @@ tcp dport 53317 accept
 ## Wallpaper and profile picture
 
 Put the image in `~/Pictures/wallpapers`, point to it in
-`~/.config/hypr/hyprpaper.conf` and generate the colours:
+`~/.config/hypr/hyprpaper.conf` and generate the colours (the bar and menus read
+them from `~/.local/state/yunagi/colors.json`):
 
 ```
 matugen image <image> -m dark -t scheme-vibrant --source-color-index 0

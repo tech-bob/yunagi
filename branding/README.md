@@ -21,8 +21,8 @@ one for the bar in Settings → Look, and the screensaver draws them.
 | Spiral | `spiral-mark/` |
 | Octahedron, Brilliant | `wire/` |
 
-Don't delete or rename these without updating `home/.local/bin/yunagi-screensaver`
-and `home/.config/quickshell/Bar.qml` / `Settings.qml`.
+Don't delete or rename these without updating `bin/yunagi-screensaver`
+and `default/quickshell/Bar.qml` / `Settings.qml`.
 
 ## Other assets
 

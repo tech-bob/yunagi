@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""The SSH page in Yunagi's menu: the agent (gcr-ssh-agent, gnome-keyring's) and a new key.
+
+  yunagi-ssh status          JSON: whether the agent is on
+  yunagi-ssh do ACTION       in a terminal: enable, disable (the agent), new (a key)
+"""
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+HOME = Path.home()
+SSH = HOME / ".ssh"
+
+
+def sock():
+    """The agent's socket: the session's, else gcr's own."""
+    s = os.environ.get("SSH_AUTH_SOCK", "")
+    if s and Path(s).is_socket():
+        return s
+    gcr = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "gcr/ssh"
+    return str(gcr) if gcr.is_socket() else ""
+
+
+CONF = HOME / ".config/environment.d/90-gcr-ssh-agent.conf"
+
+
+def status():
+    print(json.dumps({"agent": bool(sock())}))
+
+
+def done(ok):
+    print("\n\033[32mDone\033[0m" if ok else "\n\033[31mFailed\033[0m", end=" — press Enter to close")
+    input()
+
+
+def do(action):
+    if action == "enable":
+        # As Omarchy does: gcr's agent, which asks for passphrases in a window and can keep them
+        ok = subprocess.run(["systemctl", "--user", "enable", "--now", "gcr-ssh-agent.socket"]).returncode == 0
+        CONF.parent.mkdir(parents=True, exist_ok=True)
+        CONF.write_text("SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/gcr/ssh\n")
+        print("The agent is on. Log out and in again so every program finds it; ssh-add adds keys.")
+        done(ok)
+    elif action == "disable":
+        ok = subprocess.run(["systemctl", "--user", "disable", "--now", "gcr-ssh-agent.socket", "gcr-ssh-agent.service"]).returncode == 0
+        CONF.unlink(missing_ok=True)
+        print("The agent is off. Log out and in again so every program lets go of it.")
+        done(ok)
+    elif action == "new":
+        name = input("Name of the key file in ~/.ssh [id_ed25519]: ").strip() or "id_ed25519"
+        key = SSH / Path(name).name
+        SSH.mkdir(mode=0o700, exist_ok=True)
+        ok = subprocess.run(["ssh-keygen", "-t", "ed25519", "-f", str(key), "-C", f"{os.environ.get('USER', '')}@{os.uname().nodename}"]).returncode == 0
+        if ok:
+            print(f"\nPublic key ({key.name}.pub), for GitHub and servers:\n")
+            print((SSH / f"{key.name}.pub").read_text())
+        done(ok)
+    else:
+        print(f"Unknown action: {action}")
+        done(False)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["status"]:
+        status()
+    elif sys.argv[1:2] == ["do"] and len(sys.argv) == 3:
+        do(sys.argv[2])
+    else:
+        sys.exit("usage: yunagi-ssh status | do enable|disable|new")

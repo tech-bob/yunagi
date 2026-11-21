@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Usage limits of the AI agents, for the robot in the bar.
+
+Runs from yunagi-ai-usage.timer in each account that has logins: the AI account
+writes /home/delat/ai-usage.json, the admin (Grok Bot is the admin's app)
+~/.local/state/yunagi/ai-usage.json. The logins stay in their account; only the
+percentages are written. Claude: Anthropic's OAuth usage endpoint. Codex: the
+Codex app-server. Grok CLI: _x.ai/billing over `grok agent stdio`. Grok Bot:
+Cursor's GetSandUsageStatus with the app's own token. An agent that cannot be
+read keeps its last numbers, marked stale.
+"""
+
+import base64
+import grp
+import hashlib
+import json
+import os
+import pwd
+from pathlib import Path
+import select
+import subprocess
+import time
+import urllib.request
+from datetime import datetime, timezone
+
+HOME = Path.home()
+USER = pwd.getpwuid(os.getuid()).pw_name
+
+
+def is_ai():
+    """The AI account: named in /etc/yunagi/ai-user, else in delat without sudo."""
+    try:
+        return Path("/etc/yunagi/ai-user").read_text().strip() == USER
+    except OSError:
+        groups = {g.gr_name for g in grp.getgrall() if USER in g.gr_mem}
+        return "delat" in groups and not groups & {"wheel", "sudo"}
+
+
+OUT = Path("/home/delat/ai-usage.json") if is_ai() else \
+    Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local/state") / "yunagi/ai-usage.json"
+
+
+def iso(epoch):
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat() if epoch else ""
+
+
+def claude():
+    creds = HOME / ".claude/.credentials.json"
+    if not creds.exists():
+        return None
+    oauth = json.loads(creds.read_text())["claudeAiOauth"]
+    if oauth.get("expiresAt", 0) / 1000 < time.time():
+        raise RuntimeError("Sign-in expired; it renews the next time Claude Code runs")
+    req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
+        "Authorization": "Bearer " + oauth["accessToken"],
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": "yunagi-ai-usage",
+    })
+    data = json.load(urllib.request.urlopen(req, timeout=15))
+    limits = []
+    for key, label, mins in (("five_hour", "5 hours", 300), ("seven_day", "Week", 10080)):
+        w = data.get(key)
+        if w and w.get("utilization") is not None:
+            limits.append({"label": label, "used": w["utilization"] / 100, "windowMins": mins, "resetsAt": w.get("resets_at") or ""})
+    return {"plan": oauth.get("subscriptionType") or "", "limits": limits}
+
+
+class Rpc:
+    """JSON-RPC over a program's stdin and stdout, one message per line."""
+
+    def __init__(self, argv, name):
+        self.name = name
+        self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.DEVNULL, text=True)
+
+    def send(self, msg):
+        self.proc.stdin.write(json.dumps(msg) + "\n")
+        self.proc.stdin.flush()
+
+    def call(self, rid, method, params=None, timeout=20):
+        self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}})
+        end = time.time() + timeout
+        while time.time() < end:
+            if not select.select([self.proc.stdout], [], [], 0.25)[0]:
+                continue
+            line = self.proc.stdout.readline()
+            if not line:
+                break
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if msg.get("id") == rid:
+                if "error" in msg:
+                    raise RuntimeError(f"{self.name}: {msg['error'].get('message', 'error')}")
+                return msg.get("result") or {}
+        raise RuntimeError(f"{self.name} did not answer")
+
+    def close(self):
+        self.proc.terminate()
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+
+
+def codex():
+    exe = HOME / ".local/bin/codex"
+    if not (HOME / ".codex/auth.json").exists() or not exe.exists():
+        return None
+    rpc = Rpc([str(exe), "-s", "read-only", "-a", "on-request", "app-server"], "Codex")
+    try:
+        rpc.call(1, "initialize", {"clientInfo": {"name": "yunagi-ai-usage", "version": "1"}})
+        rpc.send({"method": "initialized", "params": {}})
+        rl = rpc.call(2, "account/rateLimits/read").get("rateLimits") or {}
+    finally:
+        rpc.close()
+    limits = []
+    for w in (rl.get("primary"), rl.get("secondary")):
+        if w and w.get("usedPercent") is not None:
+            mins = w.get("windowDurationMins") or 0
+            label = "Week" if mins == 10080 else f"{mins // 60} hours" if mins and mins % 60 == 0 else f"{mins} min"
+            limits.append({"label": label, "used": w["usedPercent"] / 100, "windowMins": mins, "resetsAt": iso(w.get("resetsAt"))})
+    return {"plan": rl.get("planType") or "", "limits": limits}
+
+
+def grok():
+    exe = HOME / ".grok/bin/grok"
+    if not (HOME / ".grok/auth.json").exists() or not exe.exists():
+        return None
+    rpc = Rpc([str(exe), "agent", "stdio"], "Grok")
+    try:
+        rpc.call(0, "initialize", {"protocolVersion": 1, "clientCapabilities": {}})
+        res = rpc.call(1, "_x.ai/billing")
+    finally:
+        rpc.close()
+    cfg = res.get("config") or {}
+    period = cfg.get("currentPeriod") or {}
+    start, end = period.get("start"), period.get("end")
+    mins = int((datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds() // 60) if start and end else 0
+    label = "Week" if period.get("type", "").endswith("WEEKLY") else "Month" if period.get("type", "").endswith("MONTHLY") else "Period"
+    limits = [] if cfg.get("creditUsagePercent") is None else [
+        {"label": label, "used": cfg["creditUsagePercent"] / 100, "windowMins": mins, "resetsAt": end or ""}]
+    return {"plan": res.get("subscription_tier") or "", "limits": limits}
+
+
+def jwt_expired(token):
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "=="))
+        return claims.get("exp", 0) < time.time()
+    except (IndexError, ValueError):
+        return False
+
+
+def grokbot():
+    secrets = HOME / ".config/Grok Bot/sand-secrets.json"
+    if not secrets.exists():
+        return None
+    accounts = json.loads(json.loads(secrets.read_text())["cursor-accounts"])
+    if not accounts.get("active"):
+        return None
+    blob = base64.b64decode(accounts["accounts"][accounts["active"]]["cursor-access-token"])
+    if blob[:3] != b"v10":
+        raise RuntimeError("Token is kept in the keyring")
+    # Electron's safeStorage without a keyring: AES-128-CBC with Chromium's fixed key
+    key = hashlib.pbkdf2_hmac("sha1", b"peanuts", b"saltysalt", 1, 16)
+    token = subprocess.run(["openssl", "enc", "-d", "-aes-128-cbc", "-K", key.hex(), "-iv", (b" " * 16).hex()],
+                           input=blob[3:], capture_output=True, check=True).stdout.decode()
+    if jwt_expired(token):
+        raise RuntimeError("Sign-in expired; it renews while Grok Bot runs")
+    req = urllib.request.Request("https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus", data=b"{}",
+                                 method="POST", headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                                                         "Connect-Protocol-Version": "1", "User-Agent": "yunagi-ai-usage"})
+    data = json.load(urllib.request.urlopen(req, timeout=15))
+    limits = [] if data.get("usagePercent") is None else [
+        {"label": "Week", "used": data["usagePercent"] / 100, "windowMins": 10080, "resetsAt": data.get("nextResetTimestampUtc") or ""}]
+    return {"plan": data.get("grokPlanLabel") or "", "limits": limits}
+
+
+def main():
+    try:
+        old = {a["id"]: a for a in json.loads(OUT.read_text()).get("agents", [])}
+    except (OSError, ValueError):
+        old = {}
+    agents = []
+    for aid, name, read in (("claude", "Claude", claude), ("codex", "Codex", codex), ("grok", "Grok", grok),
+                            ("grokbot", "Grok Bot", grokbot)):
+        try:
+            res = read()
+            if res is None:
+                continue
+            agents.append({"id": aid, "name": name, **res})
+        except Exception as e:  # keep the last numbers, marked stale
+            prev = old.get(aid, {"id": aid, "name": name, "plan": "", "limits": []})
+            agents.append({**prev, "stale": True, "error": str(e)[:200]})
+    doc = {"updatedAt": datetime.now(timezone.utc).isoformat(), "account": USER, "agents": agents}
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    tmp = OUT.with_name(f".ai-usage.{os.getpid()}.json")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    tmp.chmod(0o644)
+    tmp.replace(OUT)
+
+
+if __name__ == "__main__":
+    main()

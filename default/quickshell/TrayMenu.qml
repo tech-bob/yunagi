@@ -31,6 +31,7 @@ Scope {
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         screen: root.screen
 
         anchors {
@@ -43,6 +44,12 @@ Scope {
         }
 
         PanelBackground {}
+
+        // Esc closes it, as a click beside it does
+        Item {
+            focus: true
+            Keys.onEscapePressed: root.closeRequested()
+        }
 
         Column {
             id: col

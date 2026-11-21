@@ -12,7 +12,7 @@ Desktop entry name: **Packages** (`yunagi-pkg/yunagi-pkg.desktop`).
 yunagi-pkg
 ```
 
-Or: Settings menu → **Packages** (`Super+Ctrl+Space`), or the **Packages** app
+Or: Menu → **Packages** (`Super+Ctrl+Space`), or the **Packages** app
 entry (opens in kitty). There are **no CLI flags or subcommands**; the binary is
 a full-screen TUI.
 

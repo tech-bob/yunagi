@@ -21,18 +21,22 @@ Scope {
         activePanel = "";
     }
 
-    function showPanel(panel, screen) {
+    // Panels the menu opens sit in the middle of the screen
+    property bool panelCentered: false
+
+    function showPanel(panel, screen, centered) {
         closeAll();
+        panelCentered = !!centered;
         if (!popupTarget.select(screen))
             return;
         activePanel = panel;
     }
 
-    function togglePanel(panel, screen) {
+    function togglePanel(panel, screen, centered) {
         if (activePanel === panel)
             closeAll();
         else
-            showPanel(panel, screen);
+            showPanel(panel, screen, centered);
     }
 
     function toggleRecording(screen) {
@@ -42,7 +46,12 @@ Scope {
             togglePanel("record", screen);
     }
 
-    readonly property var marks: ["diamant", "labyrint", "briljant", "oktaeder", "kristall", "prisma", "spiral"]
+    IpcHandler {
+        target: "aiusage"
+        function toggle(): void { root.togglePanel("ai"); }
+    }
+
+    readonly property var marks: ["diamant", "labyrint"]
     property int markIdx: 0
     property bool stayAwake: false
     property bool night: false
@@ -120,12 +129,18 @@ Scope {
         function toggle(): void {
             root.togglePanel("network");
         }
+        function center(): void {
+            root.togglePanel("network", null, true);
+        }
     }
 
     IpcHandler {
         target: "audio"
         function toggle(): void {
             root.togglePanel("audio");
+        }
+        function center(): void {
+            root.togglePanel("audio", null, true);
         }
     }
 
@@ -151,12 +166,18 @@ Scope {
         function toggle(): void {
             root.togglePanel("brightness");
         }
+        function center(): void {
+            root.togglePanel("brightness", null, true);
+        }
     }
 
     IpcHandler {
         target: "bt"
         function toggle(): void {
             root.togglePanel("bt");
+        }
+        function center(): void {
+            root.togglePanel("bt", null, true);
         }
         function show(): void {
             root.showPanel("bt");
@@ -416,6 +437,32 @@ Scope {
                     }
                 }
 
+                // AI usage: the robot opens a panel with each agent's windows. Green, yellow
+                // from 70 % and red from 90 % of the most used limit.
+                Image {
+                    id: robot
+                    visible: AiUsage.agents.length > 0
+                    anchors.left: clockText.right
+                    anchors.leftMargin: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 19
+                    height: 19
+                    sourceSize: Qt.size(48, 48)
+                    readonly property real worst: Math.max(0, ...AiUsage.agents.map(a => AiUsage.peak(a)))
+                    readonly property color tint: worst >= 0.9 ? "#f7768e" : worst >= 0.7 ? "#e0af68" : "#9ece6a"
+                    source: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+                        + '<g fill="' + tint + '" fill-rule="evenodd"><circle cx="12" cy="2.6" r="1.8"/><rect x="11.2" y="3.5" width="1.6" height="3"/>'
+                        + '<path d="M6 6.5h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z'
+                        + 'M8.8 10.2a2 2 0 1 0 .01 0zM15.2 10.2a2 2 0 1 0 .01 0zM8.5 16h7v1.8h-7z"/>'
+                        + '<rect x=".8" y="11" width="1.6" height="4.5" rx=".6"/><rect x="21.6" y="11" width="1.6" height="4.5" rx=".6"/></g></svg>')
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.togglePanel("ai", bar.screen)
+                    }
+                }
+
                 Row {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
@@ -444,6 +491,10 @@ Scope {
                                             root.trayItem = it;
                                             root.trayX = trayIcon.mapToItem(null, trayIcon.width / 2, 0).x;
                                             root.togglePanel("tray", bar.screen);
+                                        } else {
+                                            // No menu to read (Wine draws its own): the item shows it
+                                            const p = trayIcon.mapToItem(null, 0, trayIcon.height);
+                                            it.display(bar, p.x, p.y + 8);
                                         }
                                     } else
                                         it.activate();
@@ -612,12 +663,16 @@ Scope {
         id: network
         open: root.activePanel === "network"
         screen: root.popScreen
+        onCloseRequested: root.closeAll()
+        centered: root.panelCentered
     }
 
     BluetoothPanel {
         id: bluetooth
         open: root.activePanel === "bt"
         screen: root.popScreen
+        onCloseRequested: root.closeAll()
+        centered: root.panelCentered
     }
 
     TrayMenu {
@@ -632,6 +687,8 @@ Scope {
         id: audio
         open: root.activePanel === "audio"
         screen: root.popScreen
+        onCloseRequested: root.closeAll()
+        centered: root.panelCentered
         onAdjusted: osd.volume(audio.volPct, audio.volMuted)
     }
 
@@ -639,6 +696,7 @@ Scope {
         id: battery
         open: root.activePanel === "battery"
         screen: root.popScreen
+        onCloseRequested: root.closeAll()
     }
 
     CapturePanel {
@@ -653,6 +711,12 @@ Scope {
     Notifications {
         dnd: root.dnd
         mainScreen: brightness.mainName
+    }
+
+    AiUsagePanel {
+        visible: root.activePanel === "ai"
+        screen: root.popScreen
+        onCloseRequested: root.closeAll()
     }
 
     Calendar {
@@ -672,6 +736,8 @@ Scope {
         id: brightness
         open: root.activePanel === "brightness"
         screen: root.popScreen
+        onCloseRequested: root.closeAll()
+        centered: root.panelCentered
         onAdjusted: pct => osd.brightness(pct)
     }
 

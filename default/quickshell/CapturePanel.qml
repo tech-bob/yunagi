@@ -154,6 +154,7 @@ Scope {
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         focusable: true
+        WlrLayershell.keyboardFocus: root.captureOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.layer: WlrLayer.Overlay
         screen: root.screen
 
@@ -165,6 +166,12 @@ Scope {
         }
 
         PanelBackground {}
+
+        // Esc closes it, as a click beside it does
+        Item {
+            focus: root.captureOpen
+            Keys.onEscapePressed: root.closeRequested()
+        }
 
         Column {
             id: capCol

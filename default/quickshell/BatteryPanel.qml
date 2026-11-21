@@ -9,6 +9,7 @@ Scope {
 
     property bool open: false
     property var screen: null
+    signal closeRequested()
 
     readonly property bool hasBat: UPower.displayDevice.isLaptopBattery && UPower.displayDevice.isPresent
     readonly property int batPct: {
@@ -26,6 +27,7 @@ Scope {
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         focusable: true
+        WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.layer: WlrLayer.Overlay
         screen: root.screen
 
@@ -39,6 +41,12 @@ Scope {
         }
 
         PanelBackground {}
+
+        // Esc closes it, as a click beside it does
+        Item {
+            focus: true
+            Keys.onEscapePressed: root.closeRequested()
+        }
 
         Column {
             id: batCol

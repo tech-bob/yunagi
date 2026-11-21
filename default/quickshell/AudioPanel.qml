@@ -10,6 +10,9 @@ Scope {
 
     property bool open: false
     property var screen: null
+    signal closeRequested()
+    // Opened from the menu: in the middle of the screen; from the bar: under its icon
+    property bool centered: false
     signal adjusted()
 
     readonly property var sink: Pipewire.defaultAudioSink
@@ -168,19 +171,26 @@ Scope {
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         focusable: true
+        WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.layer: WlrLayer.Overlay
         screen: root.screen
 
         anchors {
             top: true
-            right: true
+            right: !root.centered
         }
         margins {
-            top: 54
+            top: root.centered ? Math.max(54, ((root.screen ? root.screen.height : 1080) - implicitHeight) / 2) : 54
             right: 10
         }
 
         PanelBackground {}
+
+        // Esc closes it, as a click beside it does
+        Item {
+            focus: true
+            Keys.onEscapePressed: root.closeRequested()
+        }
 
         PwNodePeakMonitor {
             id: micPeak

@@ -9,6 +9,9 @@ Scope {
 
     property bool open: false
     property var screen: null
+    signal closeRequested()
+    // Opened from the menu: in the middle of the screen; from the bar: under its icon
+    property bool centered: false
     signal adjusted(int pct)
 
     property string dev: ""
@@ -126,11 +129,13 @@ Scope {
         path: root.hasBacklight ? "/sys/class/backlight/" + root.dev + "/max_brightness" : ""
     }
 
-    // sysfs sends no change events; poll so hardware keys and other tools show up.
+    // sysfs sends no change events; poll while the panel is open so other tools show up.
+    // The brightness keys go through IPC and reload on their own.
     Timer {
         interval: 250
-        running: root.hasBacklight
+        running: root.hasBacklight && root.open
         repeat: true
+        triggeredOnStart: true
         onTriggered: briFile.reload()
     }
 
@@ -253,19 +258,26 @@ Scope {
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         focusable: true
+        WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.layer: WlrLayer.Overlay
         screen: root.screen
 
         anchors {
             top: true
-            right: true
+            right: !root.centered
         }
         margins {
-            top: 54
+            top: root.centered ? Math.max(54, ((root.screen ? root.screen.height : 1080) - implicitHeight) / 2) : 54
             right: 10
         }
 
         PanelBackground {}
+
+        // Esc closes it, as a click beside it does
+        Item {
+            focus: true
+            Keys.onEscapePressed: root.closeRequested()
+        }
 
         Column {
             id: briCol

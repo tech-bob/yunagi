@@ -57,13 +57,9 @@ Scope {
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Overlay
         mask: Region {}
-
-        anchors {
-            bottom: true
-        }
-        margins {
-            bottom: 56
-        }
+        // Centred, a bit below the middle of the screen
+        anchors.bottom: true
+        margins.bottom: Math.round((root.screen?.height ?? 1080) * 0.3)
 
         RectangularShadow {
             anchors.fill: osdCard

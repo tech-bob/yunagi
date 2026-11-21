@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# yunagi-ai — the AI page in Yunagi's menu.
+#
+#   yunagi-ai status            JSON for the menu: the AI account and the state of each item
+#   yunagi-ai do ITEM [NAME]    sets ITEM up in this terminal, with sudo where needed
+#
+# Items: claude, codex, grok (agents in the AI account), usage (the usage timers for
+# the bar), grokbot, hermes (the admin's desktop apps, AUR), password (the AI account's,
+# for su), tmux (shared terminal). The AI account has no sudo; the agents and their
+# logins live in its home. Logged in as the AI account, only its own agents are set up.
+set -euo pipefail
+
+conf=/etc/yunagi/ai-user
+shared=/home/delat
+usage_file=$shared/ai-usage.json
+
+declare -A url=([claude]=https://claude.ai/install.sh [codex]=https://chatgpt.com/codex/install.sh [grok]=https://x.ai/cli/install.sh)
+declare -A login=([claude]="claude auth login" [codex]="codex login" [grok]="grok login --oauth")
+declare -A bin=([claude]=.local/bin/claude [codex]=.local/bin/codex [grok]=.grok/bin/grok)
+declare -A cred=([claude]=.claude/.credentials.json [codex]=.codex/auth.json [grok]=.grok/auth.json)
+declare -A pkg=([grokbot]=grok-bot-bin [hermes]=hermes-agent-desktop)
+
+# The configured AI account, else a member of delat without sudo, else none
+account() {
+    local a
+    a=$(cat "$conf" 2>/dev/null || true)
+    if [ -n "$a" ] && id "$a" &>/dev/null; then echo "$a"; return; fi
+    for a in $(getent group delat | cut -d: -f4 | tr , ' '); do
+        if [ "$a" != "$USER" ] && ! id -nG "$a" | grep -qwE 'wheel|sudo'; then echo "$a"; return; fi
+    done
+}
+
+# Logged in as the AI account itself: named in the config, else no sudo and in delat
+is_ai() {
+    local a
+    a=$(cat "$conf" 2>/dev/null || true)
+    if [ -n "$a" ]; then [ "$a" = "$USER" ]; return; fi
+    id -nG | grep -qw delat && ! id -nG | grep -qwE 'wheel|sudo'
+}
+
+# --- Status ------------------------------------------------------------------
+
+status() {
+    local ai self=false k s items=()
+    if is_ai; then ai=$USER self=true; else ai=$(account); fi
+    for k in claude codex grok; do
+        if $self; then
+            [ -s "$HOME/${cred[$k]}" ] && s=ready || s=setup
+        else
+            # Signed in when the usage timer can read it; the AI account's home is closed
+            s=setup
+            [ -n "$ai" ] && python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(not (d.get("account")==sys.argv[2] and any(a["id"]==sys.argv[3] for a in d.get("agents",[]))))' \
+                "$usage_file" "$ai" "$k" 2>/dev/null && s=ready
+        fi
+        items+=("\"$k\":\"$s\"")
+    done
+    if $self; then
+        systemctl --user is-enabled -q yunagi-ai-usage.timer 2>/dev/null && s=ready || s=install
+    else
+        systemctl is-enabled -q yunagi-ai-usage.timer 2>/dev/null && s=ready || s=install
+    fi
+    items+=("\"usage\":\"$s\"")
+    if ! $self; then
+        for k in grokbot hermes; do
+            pacman -T "${pkg[$k]}" >/dev/null && s=ready || s=install
+            items+=("\"$k\":\"$s\"")
+        done
+        [ -f "$HOME/.config/fish/functions/tmuxdela.fish" ] && [ -d "$shared/terminal" ] && s=ready || s=install
+        items+=("\"tmux\":\"$s\"")
+    fi
+    printf '{"account":"%s","self":%s,%s}\n' "$ai" "$self" "$(IFS=,; echo "${items[*]}")"
+}
+
+# --- Setting up, in a terminal ------------------------------------------------
+
+say() { printf '\n\e[1;36m%s\e[0m\n' "$*"; }
+
+# The AI account, the group delat and /home/delat; a name only matters the first time
+ensure_account() {
+    ai=$(account)
+    if [ -z "$ai" ]; then
+        ai=${1:-ai}
+        [[ $ai =~ ^[a-z_][a-z0-9_-]{0,31}$ && $ai != root && $ai != "$USER" ]] || { echo "Invalid account name: $ai"; return 1; }
+        say "Creating the AI account $ai (no sudo)"
+        sudo groupadd -f delat
+        sudo useradd -m -G delat -s /usr/bin/fish "$ai"
+    fi
+    if id -nG "$ai" | grep -qwE 'wheel|sudo'; then echo "$ai has sudo; the AI account must not."; return 1; fi
+    id -nG "$ai" | grep -qw delat || sudo usermod -aG delat "$ai"
+    id -nG "$USER" | grep -qw delat || { sudo usermod -aG delat "$USER"; echo "Log out and in again: you were added to delat."; }
+    [ -d "$shared" ] || sudo install -d -m 2775 -o root -g delat "$shared"
+    [ "$(cat "$conf" 2>/dev/null)" = "$ai" ] || echo "$ai" | sudo install -Dm644 /dev/stdin "$conf"
+    # The agents live in ~/.local/bin and ~/.grok/bin
+    case $(getent passwd "$ai" | cut -d: -f7) in
+        */fish) sudo -u "$ai" -H sh -c 'f=~/.config/fish/conf.d/yunagi-ai.fish; [ -e $f ] || { mkdir -p ${f%/*}; echo "fish_add_path -g ~/.local/bin ~/.grok/bin" >$f; }' ;;
+        *) sudo -u "$ai" -H sh -c 'grep -qs yunagi-ai ~/.bashrc || echo "export PATH=\"\$HOME/.local/bin:\$HOME/.grok/bin:\$PATH\"  # yunagi-ai" >>~/.bashrc' ;;
+    esac
+}
+
+# Runs a command as the AI account, or as yourself when you are it
+as_ai() {
+    if is_ai; then
+        env PATH="$HOME/.local/bin:$HOME/.grok/bin:$PATH" "$@"
+    else
+        local h; h=$(getent passwd "$ai" | cut -d: -f6)
+        sudo -u "$ai" -H env -C "$h" PATH="$h/.local/bin:$h/.grok/bin:/usr/local/bin:/usr/bin" "$@"
+    fi
+}
+
+usage_units() {
+    printf '[Unit]\nDescription=AI usage for the Yunagi bar\nAfter=network-online.target\n\n[Service]\nType=oneshot\n%sExecStart=/usr/local/bin/yunagi-ai-usage\n' "${1:+$1$'\n'}"
+}
+usage_timer() {
+    printf '[Unit]\nDescription=AI usage for the Yunagi bar, every 5 minutes\n\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=5min\n\n[Install]\nWantedBy=timers.target\n'
+}
+
+# The usage timer in your own account: your agents, or as the admin your Grok Bot
+ensure_own_usage() {
+    local u=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
+    if ! systemctl --user is-enabled -q yunagi-ai-usage.timer 2>/dev/null; then
+        mkdir -p "$u"
+        usage_units "" >"$u/yunagi-ai-usage.service"
+        usage_timer >"$u/yunagi-ai-usage.timer"
+        systemctl --user daemon-reload
+        systemctl --user enable --now yunagi-ai-usage.timer
+    fi
+    systemctl --user start yunagi-ai-usage.service || true
+}
+
+# The usage timer in the AI account as a system unit run as $ai, plus your own
+ensure_usage() {
+    if ! is_ai && ! systemctl is-enabled -q yunagi-ai-usage.timer 2>/dev/null; then
+        say "Usage timer for $ai"
+        usage_units "User=$ai" | sudo tee /etc/systemd/system/yunagi-ai-usage.service >/dev/null
+        usage_timer | sudo tee /etc/systemd/system/yunagi-ai-usage.timer >/dev/null
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now yunagi-ai-usage.timer
+    fi
+    # Fresh numbers now, so the menu shows the result
+    is_ai || sudo systemctl start yunagi-ai-usage.service || true
+    ensure_own_usage
+}
+
+agent() {
+    local k=$1
+    if ! as_ai sh -c "test -x \"\$HOME/${bin[$k]}\""; then
+        say "Installing $k"
+        as_ai bash -c "curl -fsSL ${url[$k]} | bash"
+    fi
+    say "Signing in to $k: open the link (Ctrl+click), sign in, then come back here"
+    as_ai ${login[$k]}
+    ensure_usage
+}
+
+restart_shell() {
+    say "Restarting the bar, so the new app's icon shows"
+    pkill -x qs || true; pkill -x quickshell || true
+    sleep 1
+    hyprctl dispatch "hl.dsp.exec_cmd('qs -n -d')" >/dev/null
+}
+
+aur() {
+    local p=${pkg[$1]}
+    if ! command -v paru >/dev/null; then
+        say "Installing paru"
+        local d; d=$(mktemp -d)
+        sudo pacman -S --needed base-devel git
+        git clone https://aur.archlinux.org/paru-bin.git "$d"
+        (cd "$d" && makepkg -si)
+        rm -rf "$d"
+    fi
+    say "Installing $p"
+    paru -Syu --needed "$p"
+    restart_shell
+}
+
+shared_terminal() {
+    say "Shared terminal"
+    sudo pacman -S --needed tmux
+    sudo install -d -m 2775 -o root -g delat "$shared/terminal"
+    local f=$HOME/.config/fish/functions
+    mkdir -p "$f"
+    cat >"$f/tmuxdela.fish" <<'EOF'
+function tmuxdela --description 'tmux shared with the AI account, read-only (tmuxdela w: writable)'
+    set -l sock /home/delat/terminal/delad
+    set -l ai (cat /etc/yunagi/ai-user)
+    set -l mode r
+    test "$argv[1]" = w; and set mode w
+    if set -q TMUX
+        tmux -S $sock server-access -a $ai 2>/dev/null
+        tmux -S $sock server-access -$mode $ai
+        return
+    end
+    tmux -S $sock new -A -s delad \; run-shell "chmod g+rw $sock; tmux -S $sock server-access -a $ai 2>/dev/null; tmux -S $sock server-access -$mode $ai"
+end
+EOF
+    printf "function tmuxdelaw --description 'tmux shared with the AI account, writable'\n    tmuxdela w\nend\n" >"$f/tmuxdelaw.fish"
+    echo "tmuxdela lets $ai watch, tmuxdelaw lets it type; it joins with: tmux -S $shared/terminal/delad attach"
+}
+
+do_item() {
+    local item=$1 name=${2:-}
+    ai=$USER
+    case $item in
+        claude|codex|grok) is_ai || ensure_account "$name"; agent "$item" ;;
+        usage) is_ai || ensure_account "$name"; ensure_usage ;;
+        grokbot|hermes) aur "$item"; ensure_own_usage ;;
+        password) ensure_account "$name"; say "Password for $ai (for su $ai)"; sudo passwd "$ai" ;;
+        tmux) ensure_account "$name"; shared_terminal ;;
+        *) echo "Unknown item: $item"; return 1 ;;
+    esac
+}
+
+case ${1:-} in
+    status) status ;;
+    do)
+        trap 'printf "\n\e[31mFailed\e[0m — press Enter to close"; read -r _' ERR
+        do_item "${@:2}"
+        printf '\n\e[32mDone\e[0m — press Enter to close'; read -r _ ;;
+    *) echo "usage: yunagi-ai status | do ITEM [NAME]" >&2; exit 1 ;;
+esac

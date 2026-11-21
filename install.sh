@@ -85,17 +85,14 @@ if [ "$desktop" = yunagi ]; then lists+=(packages.txt); else lists+=(packages-gn
 [ "$apps" = yes ] && lists+=(apps.txt)
 pkgs "${lists[@]}"
 
-# Boot: Ion for existing Limine installs; Plymouth stays provisional.
+# Boot: Ion for existing Limine installs (Limine menu and Plymouth splash).
 as_root python3 boot/configure.py
 [ "$(getent passwd "$user" | cut -d: -f7)" = /usr/bin/fish ] || as_root chsh -s /usr/bin/fish "$user"
 
 firewall
 svc_enable NetworkManager bluetooth power-profiles-daemon nftables
 
-# SSH agent for every user: gcr-ssh-agent (part of gnome-keyring), keys unlocked through the keyring
-as_root systemctl --global enable gcr-ssh-agent.socket
-printf 'SSH_AUTH_SOCK=${XDG_RUNTIME_DIR}/gcr/ssh\n' | as_root install -Dm644 /dev/stdin /etc/environment.d/90-ssh-agent.conf
-
+# The SSH agent (gcr-ssh-agent) is off until you turn it on: System → SSH in the menu
 # Packages tool (yunagi-pkg): prebuilt on the ISO, otherwise built from source;
 # Rust stays only if it was already installed
 if [ -x yunagi-pkg/yunagi-pkg ]; then
@@ -110,6 +107,8 @@ else
     [ -n "$had_rust" ] || as_root pacman -Rns --noconfirm rust
 fi
 as_root install -Dm644 yunagi-pkg/yunagi-pkg.desktop /usr/share/applications/yunagi-pkg.desktop
+# AI page and usage (root runs yunagi-ai through pkexec, so it lives where only root writes)
+as_root install -Dm755 -t /usr/local/bin bin/yunagi-ai bin/yunagi-ai-usage
 
 if [ "$desktop" = yunagi ]; then
     # Login: SDDM with the Yunagi theme, active from the next boot
@@ -182,6 +181,31 @@ if [ "$desktop" = gnome ]; then
     echo "Done. Reboot to log in to GNOME."
     exit 0
 fi
+
+# Quickshell (bar and menus) runs from Yunagi's copy, so updates reach it; copies in
+# ~/.config/quickshell from older installs are moved to the backup
+qs="$home/.config/quickshell"
+if [ -d "$qs" ] && [ ! -L "$qs" ]; then
+    as_user mkdir -p "$backup/.config"
+    as_user mv "$qs" "$backup/.config/quickshell"
+    echo "Old Quickshell files moved to $backup/.config/quickshell"
+fi
+as_user ln -sfn "$share/default/quickshell" "$qs"
+as_user mkdir -p "$home/.local/state/yunagi"
+
+# The scripts are links into Yunagi's copy as well (yunagi-ai and its usage timer are in
+# /usr/local/bin, where the AI account reaches them); older copies go to the backup
+as_user mkdir -p "$home/.local/bin"
+for f in "$share"/bin/yunagi-*; do
+    n=${f##*/}
+    case $n in yunagi-ai|yunagi-ai-usage) continue ;; esac
+    dst="$home/.local/bin/$n"
+    if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+        as_user mkdir -p "$backup/.local/bin"
+        as_user mv "$dst" "$backup/.local/bin/$n"
+    fi
+    as_user ln -sfn "$f" "$dst"
+done
 
 # Keyboard layout for Hyprland, in settings.lua where the settings menu changes it
 if [ -n "$keyboard" ] && [ ! -e "$home/.config/hypr/settings.lua" ]; then

@@ -206,7 +206,7 @@ MARK_FILES = {
 
 @lru_cache(maxsize=8)
 def mark_geometry(name):
-    roots = [Path(__file__).resolve().parents[3] / "branding", Path.home() / ".local/share/yunagi/branding"]
+    roots = [Path(__file__).resolve().parents[1] / "branding", Path.home() / ".local/share/yunagi/branding"]
     path = next((root / MARK_FILES[name] for root in roots if (root / MARK_FILES[name]).is_file()), None)
     if path is None:
         raise FileNotFoundError(f"Missing screensaver mark: {name}")

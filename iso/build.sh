@@ -67,7 +67,7 @@ sed -i \
     -e 's|^iso_label=.*|iso_label="YUNAGI_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"|' \
     -e 's|^iso_publisher=.*|iso_publisher="techbob <https://github.com/tech-bob/yunagi>"|' \
     -e 's|^iso_application=.*|iso_application="Yunagi install medium"|' \
-    -e 's|^file_permissions=(|file_permissions=(\n  ["/usr/local/bin/yunagi-install"]="0:0:755"\n  ["/usr/share/yunagi/home/.local/bin/"]="0:0:755"\n  ["/usr/share/yunagi/install.sh"]="0:0:755"\n  ["/usr/share/yunagi/yunagi-pkg/yunagi-pkg"]="0:0:755"|' \
+    -e 's|^file_permissions=(|file_permissions=(\n  ["/usr/local/bin/yunagi-install"]="0:0:755"\n  ["/usr/share/yunagi/bin/"]="0:0:755"\n  ["/usr/share/yunagi/install.sh"]="0:0:755"\n  ["/usr/share/yunagi/yunagi-pkg/yunagi-pkg"]="0:0:755"|' \
     "$prof/profiledef.sh"
 # No kernel or systemd text between the boot menu and the installer
 # copytoram=n: run from the stick instead of copying the whole image to RAM first

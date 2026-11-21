@@ -24,18 +24,18 @@ def listener(text, marker):
     return matches[0]
 
 
-def value(text, key):
+def value(text, key, where="hypridle.conf"):
     match = re.search(rf"^[ \t]*{re.escape(key)}[ \t]*=[ \t]*([^\n]*)", text, re.M)
     if not match:
-        raise ValueError(f"Missing {key} in hypridle.conf.")
+        raise ValueError(f"Missing {key} in {where}.")
     return match[1].split("#", 1)[0].strip()
 
 
-def replace_value(text, key, new):
+def replace_value(text, key, new, where="hypridle.conf"):
     pattern = rf"^([ \t]*{re.escape(key)}[ \t]*=)[^\n]*"
     result, count = re.subn(pattern, lambda m: m[1] + " " + str(new), text, count=1, flags=re.M)
     if not count:
-        raise ValueError(f"Missing {key} in hypridle.conf.")
+        raise ValueError(f"Missing {key} in {where}.")
     return result
 
 
@@ -210,6 +210,73 @@ def read_git():
     return {"git_name": get("user.name"), "git_email": get("user.email")}
 
 
+# Size of the menu and the app launcher (not the bar), read by both from this file
+MENU_SIZE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "yunagi/menu-size"
+
+
+def read_menu_size():
+    try:
+        return {"menu_size": float(MENU_SIZE.read_text())}
+    except (OSError, ValueError):
+        return {"menu_size": 1.0}
+
+
+# Lock screen background: one of the pictures in ~/Pictures/wallpapers, and its blur
+HYPRLOCK = Path.home() / ".config/hypr/hyprlock.conf"
+WALLPAPERS = Path.home() / "Pictures/wallpapers"
+LOCK_BG = re.compile(r"^background\s*\{.*?^\}", re.M | re.S)
+# Blur levels as (blur_passes, blur_size): off, light, medium, strong
+LOCK_BLUR = [(0, 0), (1, 2), (2, 4), (3, 7)]
+
+
+def lock_block():
+    text = HYPRLOCK.read_text()
+    match = LOCK_BG.search(text)
+    if not match:
+        raise ValueError("Cannot find the background in hyprlock.conf.")
+    return text, match
+
+
+def read_lock():
+    pictures = sorted(p.name for p in WALLPAPERS.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))
+    out = {"lock_background": "", "lock_backgrounds": pictures, "lock_blur": ""}
+    try:
+        _, match = lock_block()
+        block = match.group()
+        out["lock_background"] = value(block, "path", "hyprlock.conf").rsplit("/", 1)[-1]
+        blur = (int(value(block, "blur_passes", "hyprlock.conf")), int(value(block, "blur_size", "hyprlock.conf")))
+        out["lock_blur"] = LOCK_BLUR.index(blur) if blur in LOCK_BLUR else "Custom"
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def set_lock(key, raw):
+    text, match = lock_block()
+    block = match.group()
+    if key == "lock_background":
+        if raw not in read_lock()["lock_backgrounds"]:
+            raise ValueError("No such picture in ~/Pictures/wallpapers.")
+        block = replace_value(block, "path", "~/Pictures/wallpapers/" + raw, "hyprlock.conf")
+    else:
+        if raw not in ("0", "1", "2", "3"):
+            raise ValueError("Blur is 0 to 3.")
+        passes, size = LOCK_BLUR[int(raw)]
+        block = replace_value(replace_value(block, "blur_passes", passes, "hyprlock.conf"), "blur_size", size, "hyprlock.conf")
+    HYPRLOCK.write_text(text[:match.start()] + block + text[match.end():])
+
+
+# Name in the lock screen greeting, read by yunagi-greeting
+DISPLAY_NAME = MENU_SIZE.parent / "display-name"
+
+
+def read_display_name():
+    try:
+        return {"display_name": DISPLAY_NAME.read_text().strip()}
+    except OSError:
+        return {"display_name": ""}
+
+
 def set_other(key, raw):
     night, inp = read_night(), read_input()
     if key in ("night_auto", "natural_scroll", "tap_to_click"):
@@ -245,10 +312,22 @@ def set_other(key, raw):
     elif key in ("natural_scroll", "tap_to_click"):
         inp[key] = new
         write_input(inp)
+    elif key == "menu_size":
+        if not 0.5 <= float(raw) <= 1.5:
+            raise ValueError("Menu size is between 50 and 150 %.")
+        MENU_SIZE.parent.mkdir(parents=True, exist_ok=True)
+        MENU_SIZE.write_text(f"{float(raw):g}\n")
     elif key in ("git_name", "git_email"):
         if key == "git_email" and raw and "@" not in raw:
             raise ValueError("That does not look like an email address.")
         subprocess.run(["git", "config", "--global", "user." + key[4:], raw], check=True)
+    elif key == "display_name":
+        if len(raw) > 32 or any(c in raw for c in "<>&\n"):
+            raise ValueError("Use up to 32 characters, without < > &.")
+        DISPLAY_NAME.parent.mkdir(parents=True, exist_ok=True)
+        DISPLAY_NAME.write_text(raw.strip() + "\n")
+    elif key in ("lock_background", "lock_blur"):
+        set_lock(key, raw)
     else:
         raise ValueError("Unknown setting.")
 
@@ -262,6 +341,9 @@ def get_all(idle_text):
     out.update(read_night())
     out.update(read_input())
     out.update(read_git())
+    out.update(read_menu_size())
+    out.update(read_display_name())
+    out.update(read_lock())
     return out
 
 

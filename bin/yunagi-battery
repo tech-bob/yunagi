@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Battery level for the lock screen; prints nothing on a computer without a battery.
+for bat in /sys/class/power_supply/BAT*; do
+    [ -r "$bat/capacity" ] || continue
+    status=$(cat "$bat/status" 2>/dev/null)
+    case $status in
+        Charging) extra=" · charging" ;;
+        Full) extra=" · full" ;;
+        *) extra="" ;;
+    esac
+    echo "Battery $(cat "$bat/capacity") %$extra"
+    exit
+done

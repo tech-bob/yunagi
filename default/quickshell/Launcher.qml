@@ -12,6 +12,15 @@ Scope {
     ScreenTarget { id: popupTarget }
     readonly property var screen: popupTarget.screen
     property string query: ""
+    // Menu size, set in the settings menu (Settings → Menu size)
+    readonly property real size: Number(sizeFile.text().trim()) || 1
+
+    FileView {
+        id: sizeFile
+        path: Quickshell.env("HOME") + "/.local/state/yunagi/menu-size"
+        watchChanges: true
+        onFileChanged: reload()
+    }
 
     readonly property var apps: {
         const q = query.trim().toLowerCase();
@@ -96,7 +105,7 @@ Scope {
         Rectangle {
             id: box
             opacity: root.open ? 1 : 0
-            scale: root.open ? 1 : 0.96
+            scale: (root.open ? 1 : 0.96) * root.size
             Behavior on opacity {
                 NumberAnimation {
                     duration: 220
@@ -121,7 +130,7 @@ Scope {
             readonly property int cols: 4
             readonly property int tile: 132
             width: cols * tile + (cols - 1) * 10 + 40
-            height: 92 + Math.min(2, Math.ceil(grid.count / cols)) * (tile + 10)
+            height: 120 + Math.min(2, Math.ceil(grid.count / cols)) * (tile + 10)
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
             radius: 16
@@ -159,12 +168,25 @@ Scope {
 
                 Text {
                     id: glyph
-                    anchors.right: parent.right
+                    anchors.right: closeButton.left
+                    anchors.rightMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
                     text: ""
                     color: Colors.primary
                     font.family: "Hack Nerd Font"
                     font.pixelSize: 18
+                }
+
+                Text {
+                    id: closeButton
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "\uf00d"
+                    color: closeHover.hovered ? Colors.primary : Colors.textDim
+                    font.family: "Hack Nerd Font"
+                    font.pixelSize: 18
+                    HoverHandler { id: closeHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: root.open = false }
                 }
 
                 TextInput {
@@ -210,8 +232,9 @@ Scope {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: field.bottom
-                anchors.bottom: parent.bottom
+                anchors.bottom: footer.top
                 anchors.margins: 20
+                anchors.bottomMargin: 4
                 anchors.topMargin: 10
                 anchors.rightMargin: 10
                 cellWidth: box.tile + 10
@@ -264,6 +287,32 @@ Scope {
                     MouseArea {
                         anchors.fill: parent
                         onClicked: root.launch(modelData)
+                    }
+                }
+            }
+
+            Item {
+                id: footer
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 20
+                anchors.bottomMargin: 14
+                height: 30
+
+                Text {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "\uf011"
+                    color: powerHover.hovered ? Colors.primary : Colors.textDim
+                    font.family: "Hack Nerd Font"
+                    font.pixelSize: 18
+                    HoverHandler { id: powerHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler {
+                        onTapped: {
+                            root.open = false;
+                            Quickshell.execDetached(["qs", "ipc", "call", "power", "toggle"]);
+                        }
                     }
                 }
             }
