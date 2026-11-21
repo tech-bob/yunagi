@@ -35,8 +35,6 @@ if [ ! -d "$share/.git" ]; then
     mkdir -p "${share%/*}"
     mv "$tmp/yunagi" "$share"
     rmdir "$tmp"
-    # yunagi-pkg is prebuilt on the ISO only; keep the installed one instead of building
-    [ -x "${old:-}/yunagi-pkg/yunagi-pkg" ] && cp "$old/yunagi-pkg/yunagi-pkg" "$share/yunagi-pkg/"
     "$share/install.sh" --desktop "$desktop" --no-apps
     restart_bar
     exit 0
