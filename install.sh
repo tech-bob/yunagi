@@ -236,4 +236,4 @@ as_user $gs set org.gnome.desktop.interface gtk-theme adw-gtk3-dark
 as_user $gs set org.gnome.desktop.interface color-scheme prefer-dark
 as_user $gs set org.gnome.desktop.interface icon-theme Papirus-Dark
 
-echo "Done. Reboot to log in to Yunagi."
+[ "$config_only" = yes ] && echo "Done." || echo "Done. Reboot to log in to Yunagi."

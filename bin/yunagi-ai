@@ -217,10 +217,10 @@ shared_terminal() {
 function tmuxdela --description 'tmux shared with the AI account, read-only (tmuxdela w: writable)'
     set -l sock /home/delat/terminal/delad
     set -l ai (cat /etc/yunagi/ai-user)
-    # Added to delat during this login: the session does not have the group yet
+    # Added to delat during this login: the session gets the group at the next login
     if not contains delat (id -Gn)
-        sg delat -c "fish -c 'tmuxdela $argv'"
-        return
+        echo "Log out and in again first: delat is new for this login."
+        return 1
     end
     set -l mode r
     test "$argv[1]" = w; and set mode w
