@@ -165,7 +165,10 @@ Scope {
                 { head: "Usage" },
                 aiStatus.usage === "ready" ? { label: "Usage", icon: "\udb81\udea9", page: "aiusage" } : item("usage", "Usage")
             ];
-            if (self) return agents;
+            if (self) return agents.concat(aiStatus.own ? [
+                { head: "Apps" },
+                item("grokbot", "Grok Bot"), item("hermes", "Hermes", "Never starts by itself")
+            ] : []);
             // The account comes first: the agents, usage and tmux live in it
             const action = (key, label, detail, icon) => ({
                 label: label, detail: detail, aiItem: key, icon: aiBusy === key ? "\uf110" : icon,
@@ -180,9 +183,14 @@ Scope {
             ].concat(aiStatus.config === "ready" ? [] :
                 [action("config", "Yunagi config", "Copies Hyprland, fish and kitty config to " + account, "\uf0c5")])
             : [
-                { label: "Create AI account", detail: "A user without sudo, group delat and Yunagi config",
+                { label: "AI agents run commands on this computer by themselves",
+                  detail: "Give them their own account, or let them work as you", info: true },
+                { label: "Create AI account", detail: "Safer: a user without sudo that cannot reach your files",
                   icon: aiBusy === "account" ? "\uf110" : "\uf067", aiCreate: true,
-                  value: aiBusy === "account" ? "…" : "Create", disabled: aiBusy !== "" && aiBusy !== "account" }
+                  value: aiBusy === "account" ? "…" : "Recommended", disabled: aiBusy !== "" && aiBusy !== "account" },
+                { label: "Use my own account", detail: "Risky: the agents can read your files and use sudo",
+                  icon: aiBusy === "own" ? "\uf110" : "\uf071", aiItem: "own",
+                  value: aiBusy === "own" ? "…" : "", disabled: aiBusy !== "" && aiBusy !== "own" }
             ];
             // Without the account only the account and the apps
             if (!account) return [{ head: "Account" }].concat(accountRows, [
@@ -393,8 +401,7 @@ Scope {
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.aiStatus = JSON.parse(text); }
-                catch (e) { root.error = "Could not read the AI status."; return; }
-                if (root.page === "ai" && root.aiBusy === "" && !root.aiStatus.self && !root.aiStatus.account) root.aiAsk();
+                catch (e) { root.error = "Could not read the AI status."; }
             }
         }
     }

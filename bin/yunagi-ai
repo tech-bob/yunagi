@@ -5,7 +5,7 @@
 #   yunagi-ai do ITEM [NAME]    sets ITEM up in this terminal, with sudo where needed
 #
 # Items: account (creates the AI account, the group delat and the account's Yunagi
-# config), claude, codex, grok (agents in the AI account), usage (the usage timers for
+# config), own (the agents in your own account instead, no AI account), claude, codex, grok (agents in the AI account), usage (the usage timers for
 # the bar), grokbot, hermes (the admin's desktop apps, AUR), password (the AI account's,
 # for su), tmux (shared terminal). The agents, usage and tmux need the account first. The AI account has no sudo; the agents and their
 # logins live in its home. Logged in as the AI account, only its own agents are set up.
@@ -42,8 +42,10 @@ is_ai() {
 # --- Status ------------------------------------------------------------------
 
 status() {
-    local ai self=false k s items=()
+    local ai self=false own=false k s items=()
     if is_ai; then ai=$USER self=true; else ai=$(account); fi
+    # Your own account chosen for the agents: an admin, so the apps are shown too
+    $self && id -nG | grep -qwE 'wheel|sudo' && own=true
     for k in claude codex grok; do
         if $self; then
             [ -s "$HOME/${cred[$k]}" ] && s=ready || s=setup
@@ -61,6 +63,12 @@ status() {
         systemctl is-enabled -q yunagi-ai-usage.timer 2>/dev/null && s=ready || s=install
     fi
     items+=("\"usage\":\"$s\"")
+    if $own; then
+        for k in grokbot hermes; do
+            pacman -T "${pkg[$k]}" >/dev/null && s=ready || s=install
+            items+=("\"$k\":\"$s\"")
+        done
+    fi
     if ! $self; then
         # The AI account's home and /etc/shadow are closed: marks in /etc/yunagi tell
         [ -n "$ai" ] && [ "$(cat /etc/yunagi/ai-config 2>/dev/null)" = "$ai" ] && s=ready || s=install
@@ -74,7 +82,7 @@ status() {
         [ -f "$HOME/.config/fish/functions/tmuxdela.fish" ] && [ -d "$shared/terminal" ] && s=ready || s=install
         items+=("\"tmux\":\"$s\"")
     fi
-    printf '{"account":"%s","self":%s,%s}\n' "$ai" "$self" "$(IFS=,; echo "${items[*]}")"
+    printf '{"account":"%s","self":%s,"own":%s,%s}\n' "$ai" "$self" "$own" "$(IFS=,; echo "${items[*]}")"
 }
 
 # --- Setting up, in a terminal ------------------------------------------------
@@ -117,7 +125,7 @@ ensure_account() {
     id -nG "$ai" | grep -qw delat || sudo usermod -aG delat "$ai"
     if ! id -nG "$USER" | grep -qw delat; then
         sudo usermod -aG delat "$USER"
-        echo "You were added to delat; it takes effect at your next login."
+        echo "You were added to delat; it takes effect when you restart the computer."
     fi
     [ -d "$shared" ] || sudo install -d -m 2775 -o root -g delat "$shared"
     [ "$(cat "$conf" 2>/dev/null)" = "$ai" ] || echo "$ai" | sudo install -Dm644 /dev/stdin "$conf"
@@ -219,7 +227,7 @@ function tmuxdela --description 'tmux shared with the AI account, read-only (tmu
     set -l ai (cat /etc/yunagi/ai-user)
     # Added to delat during this login: the session gets the group at the next login
     if not contains delat (id -Gn)
-        echo "Log out and in again first: delat is new for this login."
+        echo "Restart the computer first: delat is new since you logged in."
         return 1
     end
     set -l mode r
@@ -241,6 +249,9 @@ do_item() {
     ai=$USER
     case $item in
         account) ensure_account "$name"; set_password ;;
+        own)
+            say "The agents in your own account ($USER)"
+            echo "$USER" | sudo install -Dm644 /dev/stdin "$conf" ;;
         config) need_account; account_config ;;
         claude|codex|grok) is_ai || need_account; agent "$item" ;;
         usage) is_ai || need_account; ensure_usage ;;
