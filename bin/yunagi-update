@@ -3,25 +3,30 @@
 #
 # ~/.local/share/yunagi becomes a git clone the first time (installs from the ISO have
 # no git): the old copy is kept beside it and install.sh runs once, backing up config
-# that differs. After that: git pull, new packages, the system files, the packages tool
-# when it changed, config files that are new in Yunagi (your own copies are left
-# alone) and a restart of the bar.
+# that differs. After that: git pull, then whatever changed since the last update that
+# finished: new packages, the system files, the packages tool, config files that are
+# new in Yunagi (your own copies are left alone), and a restart of the bar.
 set -euo pipefail
 
 url=https://github.com/tech-bob/yunagi
 share=$HOME/.local/share/yunagi
+state=$HOME/.local/state/yunagi/updated
 
 say() { printf '\n\e[1;36m%s\e[0m\n' "$*"; }
 
 restart_bar() {
     [ "$desktop" = yunagi ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || return 0
     say "Restarting the bar"
-    pkill -x qs || true; pkill -x quickshell || true
+    pkill -u "$USER" -x qs || true; pkill -u "$USER" -x quickshell || true
     sleep 1
     hyprctl dispatch "hl.dsp.exec_cmd('qs -n -d')" >/dev/null
 }
 
-if systemctl is-enabled -q gdm 2>/dev/null; then desktop=gnome; else desktop=yunagi; fi
+done_at() { mkdir -p "${state%/*}"; git -C "$share" rev-parse HEAD >"$state"; }
+
+if systemctl is-enabled -q sddm 2>/dev/null; then desktop=yunagi
+elif systemctl is-enabled -q gdm 2>/dev/null; then desktop=gnome
+else desktop=minimal; fi
 
 if [ ! -d "$share/.git" ]; then
     say "First update: $share becomes a git clone"
@@ -36,35 +41,52 @@ if [ ! -d "$share/.git" ]; then
     mv "$tmp/yunagi" "$share"
     rmdir "$tmp"
     "$share/install.sh" --desktop "$desktop" --no-apps
+    done_at
     restart_bar
     exit 0
 fi
 
 cd "$share"
-before=$(git rev-parse HEAD)
 say "Fetching"
 git pull --ff-only
+# From the last update that finished, so an interrupted one is redone; unknown → all
+before=$(cat "$state" 2>/dev/null || git rev-parse HEAD@{1} 2>/dev/null || true)
+git cat-file -e "${before:-x}^{commit}" 2>/dev/null || before=$(git rev-list --max-parents=0 HEAD | tail -1)
 if [ "$(git rev-parse HEAD)" = "$before" ]; then
     echo "Yunagi is up to date ($(cat VERSION))."
     exit 0
 fi
 git log --oneline "$before..HEAD"
+changed() { ! git diff --quiet "$before" HEAD -- "$@"; }
 
-say "Packages"
+if [ "$desktop" = minimal ]; then
+    done_at
+    say "Updated to $(cat VERSION)"
+    exit 0
+fi
+
+# Only packages not installed yet, with the system brought up to date (no partial upgrade)
 lists=(packages-common.txt)
 if [ "$desktop" = yunagi ]; then lists+=(packages.txt); else lists+=(packages-gnome.txt); fi
-grep -hv -e '^#' -e '^$' "${lists[@]}" | sudo pacman -S --needed --noconfirm -
+mapfile -t missing < <(grep -hv -e '^#' -e '^$' "${lists[@]}" | xargs pacman -T || true)
+if [ ${#missing[@]} -gt 0 ]; then
+    say "New packages: ${missing[*]}"
+    sudo pacman -Syu --needed --noconfirm "${missing[@]}"
+fi
 
-say "System files"
-sudo install -Dm755 -t /usr/local/bin bin/yunagi-ai bin/yunagi-ai-usage
-if [ "$desktop" = yunagi ]; then
+if changed bin/yunagi-ai bin/yunagi-ai-usage; then
+    say "AI scripts"
+    sudo install -Dm755 -t /usr/local/bin bin/yunagi-ai bin/yunagi-ai-usage
+fi
+if [ "$desktop" = yunagi ] && changed sddm; then
+    say "Login screen"
     sudo rm -rf /usr/share/sddm/themes/yunagi
     sudo cp -r sddm/yunagi /usr/share/sddm/themes/yunagi
     sudo install -Dm644 sddm/sddm.conf.d/yunagi.conf /etc/sddm.conf.d/yunagi.conf
 fi
 
-# The packages tool when its source changed; Rust stays only if it was already installed
-if ! git diff --quiet "$before" HEAD -- yunagi-pkg; then
+# The packages tool; Rust stays only if it was already installed
+if changed yunagi-pkg; then
     say "Packages tool"
     had_rust=$(pacman -Q rust 2>/dev/null || true)
     sudo pacman -S --needed --noconfirm rust
@@ -75,19 +97,23 @@ if ! git diff --quiet "$before" HEAD -- yunagi-pkg; then
     [ -n "$had_rust" ] || sudo pacman -Rns --noconfirm rust
 fi
 
-say "Config"
 # Only files you do not have yet; the ones in ~/.config are yours to change
 while IFS= read -r -d '' f; do
     dst=$HOME/${f#home/}
-    [ -e "$dst" ] || { install -D -m "$(stat -c %a "$f")" "$f" "$dst"; echo "New: ${dst#$HOME/}"; }
+    [ -e "$dst" ] || { install -D -m "$(stat -c %a "$f")" "$f" "$dst"; echo "New: ${dst#"$HOME"/}"; }
 done < <(if [ "$desktop" = yunagi ]; then find home -type f -print0
          else find home/.config/kitty home/.config/fish home/.config/nvim home/Pictures -type f -print0; fi)
+
+# Script links: new ones added, ones to removed scripts dropped
 mkdir -p "$HOME/.local/bin"
+for l in "$HOME"/.local/bin/yunagi-*; do
+    [ -L "$l" ] && [ ! -e "$l" ] && [[ $(readlink "$l") == "$share"/bin/* ]] && rm "$l"
+done
 for f in "$share"/bin/yunagi-*; do
     case ${f##*/} in yunagi-ai|yunagi-ai-usage) continue ;; esac
-    [ -e "$HOME/.local/bin/${f##*/}" ] || ln -s "$f" "$HOME/.local/bin/${f##*/}"
+    [ -e "$HOME/.local/bin/${f##*/}" ] || ln -sfn "$f" "$HOME/.local/bin/${f##*/}"
 done
 
+done_at
 restart_bar
-
 say "Updated to $(cat VERSION)"
