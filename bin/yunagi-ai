@@ -62,8 +62,6 @@ status() {
     fi
     items+=("\"usage\":\"$s\"")
     if ! $self; then
-        [ -n "$ai" ] && s=ready || s=install
-        items+=("\"account\":\"$s\"")
         # The AI account's home and /etc/shadow are closed: marks in /etc/yunagi tell
         [ -n "$ai" ] && [ "$(cat /etc/yunagi/ai-config 2>/dev/null)" = "$ai" ] && s=ready || s=install
         items+=("\"config\":\"$s\"")

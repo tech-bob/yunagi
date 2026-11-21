@@ -180,12 +180,15 @@ Scope {
             ].concat(aiStatus.config === "ready" ? [] :
                 [action("config", "Yunagi config", "Copies Hyprland, fish and kitty config to " + account, "\uf0c5")])
             : [
-                { label: aiName, detail: "Account name · Enter renames", icon: "\uf007",
-                  key: "ai_name", kind: "text", aiAccount: true },
-                { label: "Create account", detail: "User " + aiName + " without sudo, group delat and Yunagi config",
-                  icon: aiBusy === "account" ? "\uf110" : "\uf067", aiItem: "account",
+                { label: "Create AI account", detail: "A user without sudo, group delat and Yunagi config",
+                  icon: aiBusy === "account" ? "\uf110" : "\uf067", aiCreate: true,
                   value: aiBusy === "account" ? "…" : "Create", disabled: aiBusy !== "" && aiBusy !== "account" }
             ];
+            // Without the account only the account and the apps
+            if (!account) return [{ head: "Account" }].concat(accountRows, [
+                { head: "Apps" },
+                item("grokbot", "Grok Bot"), item("hermes", "Hermes", "Never starts by itself")
+            ]);
             return [{ head: "Account" }].concat(accountRows, agents,
                 aiStatus.tmux === "ready" ? [] : [item("tmux", "Shared terminal", "tmuxdela lets it watch, tmuxdelaw lets it type")], [
                 { head: "Apps" },
@@ -244,9 +247,24 @@ Scope {
 
     function saveInput() {
         const text = search.text.trim();
-        if (optionKey === "ai_name") aiName = text || "ai";
-        else request(["set", optionKey, text]);
+        if (optionKey === "ai_create") {
+            aiName = text || "ai";
+            navigate("ai");
+            aiRun({ aiItem: "account" });
+            return;
+        }
+        request(["set", optionKey, text]);
         navigate(optionReturn);
+    }
+
+    // The first time on the AI page: the account's name, then it is created
+    function aiAsk() {
+        optionKey = "ai_create";
+        optionTitle = "Create an AI account: its name";
+        optionReturn = "ai";
+        navigate("input");
+        search.text = aiName;
+        search.selectAll();
     }
 
     function aiRefresh() {
@@ -313,7 +331,7 @@ Scope {
         if (row.page) { navigate(row.page); if (row.page === "ai") aiRefresh(); if (row.page === "aiusage") AiUsage.now = Date.now(); if (row.page === "keybinds") kbProc.running = true; if (row.page === "ssh") sshRefresh(); return; }
         if (row.sshDo) { sshRun(row); return; }
         if (row.aiItem) { aiRun(row); return; }
-        if (row.aiAccount && !row.kind) return;
+        if (row.aiCreate) { aiAsk(); return; }
         if (row.kind === "slider") return;
         if (row.look) { lookMark = row.look; lookTitle = row.label; navigate("lookcolour"); return; }
         if (row.mark) {
@@ -330,7 +348,7 @@ Scope {
             optionList = row.options || [];
             optionReturn = page;
             navigate(row.kind === "choice" ? "choice" : "input");
-            if (row.kind === "text") search.text = row.aiAccount ? aiName : settings[row.key] || "";
+            if (row.kind === "text") search.text = settings[row.key] || "";
         } else if (row.choice !== undefined) {
             request(["set", optionKey, String(row.choice)]);
             navigate(optionReturn);
@@ -375,7 +393,8 @@ Scope {
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.aiStatus = JSON.parse(text); }
-                catch (e) { root.error = "Could not read the AI status."; }
+                catch (e) { root.error = "Could not read the AI status."; return; }
+                if (root.page === "ai" && root.aiBusy === "" && !root.aiStatus.self && !root.aiStatus.account) root.aiAsk();
             }
         }
     }
@@ -804,7 +823,7 @@ Scope {
                 Text {
                     id: footer
                     text: backend.running ? "Loading…"
-                        : root.page === "input" ? "Enter save   ·   Esc back"
+                        : root.page === "input" ? (root.optionKey === "ai_create" ? "Enter create   ·   Esc back" : "Enter save   ·   Esc back")
                         : ["screen", "lock", "keyboard", "mouse", "git"].includes(root.page) ? "Changes are saved immediately"
                         : root.page === "keybinds" ? "Type to search   ·   ↑ ↓ scroll   ·   Esc back"
                         : root.page === "ai" ? "Enter opens a terminal for it   ·   Esc back"
