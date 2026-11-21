@@ -24,7 +24,7 @@ prof=$work/profile
 # Always start clean: mkarchiso skips steps it finds already done in an old work dir
 rm -rf "$work"
 mkdir -p "$work" "$out"
-rm -f "$out/$name"-2*.iso
+rm -f "$out/$name-$(cat "$repo/VERSION")"-*.iso
 # No inherited ACLs from the checkout (squashfs cannot store them)
 setfacl -R -b -k "$work"
 cp -r /usr/share/archiso/configs/releng "$prof"
@@ -64,6 +64,7 @@ printf '\n[ "$(tty)" = /dev/tty1 ] && yunagi-install\n' >>"$prof/airootfs/root/.
 # Name and boot menu
 sed -i \
     -e "s|^iso_name=.*|iso_name=\"$name\"|" \
+    -e "s|^iso_version=.*|iso_version=\"$(cat "$repo/VERSION")\"|" \
     -e 's|^iso_label=.*|iso_label="YUNAGI_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"|' \
     -e 's|^iso_publisher=.*|iso_publisher="techbob <https://github.com/tech-bob/yunagi>"|' \
     -e 's|^iso_application=.*|iso_application="Yunagi install medium"|' \
@@ -72,6 +73,8 @@ sed -i \
 # No kernel or systemd text between the boot menu and the installer
 # copytoram=n: run from the stick instead of copying the whole image to RAM first
 echo 'kernel_params_x86_64="copytoram=n quiet loglevel=0 rd.udev.log_level=0 systemd.show_status=false rd.systemd.show_status=false vt.global_cursor_default=0"' >>"$prof/profiledef.sh"
+# zstd instead of xz: mksquashfs 4.7 fails at random with "xz uncompress failed with error code 9"
+echo "airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M')" >>"$prof/profiledef.sh"
 # Boot menus: archiso's own, with the name changed
 grep -rl "Arch Linux" "$prof/efiboot" "$prof/syslinux" "$prof/grub" | xargs sed -i 's/Arch Linux/Yunagi/g'
 

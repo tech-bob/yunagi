@@ -1,4 +1,4 @@
-# Toward 1.0
+# Next
 
 - **Limine:** a new theme in the look of SDDM: the same blurred photo, a bit
   darker, the wordmark at the bottom centre, light menu text in the middle.
@@ -31,11 +31,8 @@
   firewalld in a VM from the ISO; if it fits, offer it as an option.
 - **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
   Danish).
-- **Config layering:** Quickshell and the scripts run from
-  `~/.local/share/yunagi`, like the Hyprland defaults; `~/.config` holds only
-  the user's overrides, so updates no longer collide with copied files.
 
-# After 1.0, maybe
+# Later, maybe
 
 - **Network tool:** our own, in Yunagi's look, for what the network panel does not
   do (VLAN, bridges, saved connections). Until then the panel has IPv4 and DNS of
