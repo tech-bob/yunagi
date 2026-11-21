@@ -229,7 +229,9 @@ Scope {
             { label: "Network", detail: "Connections: Wi-Fi, wired, VPN, IP and DNS", icon: "\uf1eb", run: ["nm-connection-editor"] },
             { head: "This computer" },
             { label: "System information", detail: "Hardware", icon: "\uf05a", target: "info" },
-            { label: "Config", detail: "Edit configuration files", icon: "\uf121", page: "config" }
+            { label: "Config", detail: "Edit configuration files", icon: "\uf121", page: "config" },
+            { label: "Update Yunagi", detail: "From GitHub; your own config stays", icon: "\uf021",
+              run: ["kitty", "--class", "bar-tui", "--hold", "-e", Quickshell.env("HOME") + "/.local/bin/yunagi-update"] }
         ];
     }
     readonly property var shown: page === "input" ? [] : entries.filter(row => row.head ? query.trim() === ""

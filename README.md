@@ -46,6 +46,19 @@ replaces that folder. `~/.config/quickshell` and the scripts in `~/.local/bin` a
 links into it. The rest of `~/.config` (kitty, fish, nvim, GTK, matugen) are
 copies you own; files they replace are moved to `~/.yunagi-backup-<date>`.
 
+### Updating
+
+`yunagi-update`, or **Update Yunagi** in the menu: pulls from GitHub, installs new
+packages and the system files, adds config files that are new and restarts the bar.
+Your own config is left alone. The first run on an install from the ISO turns
+`~/.local/share/yunagi` into a git clone and runs `install.sh` once.
+
+Older installs without `yunagi-update`:
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/tech-bob/yunagi/main/bin/yunagi-update)
+```
+
 Optional flags (useful from the ISO chroot or scripts):
 
 ```

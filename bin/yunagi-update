@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# yunagi-update — updates Yunagi from GitHub
+#
+# ~/.local/share/yunagi becomes a git clone the first time (installs from the ISO have
+# no git): the old copy is kept beside it and install.sh runs once, backing up config
+# that differs. After that: git pull, new packages, the system files, config files that
+# are new in Yunagi (your own copies are left alone) and a restart of the bar.
+set -euo pipefail
+
+url=https://github.com/tech-bob/yunagi
+share=$HOME/.local/share/yunagi
+
+say() { printf '\n\e[1;36m%s\e[0m\n' "$*"; }
+
+restart_bar() {
+    [ "$desktop" = yunagi ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || return 0
+    say "Restarting the bar"
+    pkill -x qs || true; pkill -x quickshell || true
+    sleep 1
+    hyprctl dispatch "hl.dsp.exec_cmd('qs -n -d')" >/dev/null
+}
+
+if systemctl is-enabled -q gdm 2>/dev/null; then desktop=gnome; else desktop=yunagi; fi
+
+if [ ! -d "$share/.git" ]; then
+    say "First update: $share becomes a git clone"
+    tmp=$(mktemp -d)
+    git clone -q "$url" "$tmp/yunagi"
+    if [ -e "$share" ]; then
+        old=$share.old-$(date +%F-%H%M%S)
+        mv "$share" "$old"
+        echo "The old copy is in $old"
+    fi
+    mkdir -p "${share%/*}"
+    mv "$tmp/yunagi" "$share"
+    rmdir "$tmp"
+    # yunagi-pkg is prebuilt on the ISO only; keep the installed one instead of building
+    [ -x "${old:-}/yunagi-pkg/yunagi-pkg" ] && cp "$old/yunagi-pkg/yunagi-pkg" "$share/yunagi-pkg/"
+    "$share/install.sh" --desktop "$desktop" --no-apps
+    restart_bar
+    exit 0
+fi
+
+cd "$share"
+before=$(git rev-parse HEAD)
+say "Fetching"
+git pull --ff-only
+if [ "$(git rev-parse HEAD)" = "$before" ]; then
+    echo "Yunagi is up to date ($(cat VERSION))."
+    exit 0
+fi
+git log --oneline "$before..HEAD"
+
+say "Packages"
+lists=(packages-common.txt)
+if [ "$desktop" = yunagi ]; then lists+=(packages.txt); else lists+=(packages-gnome.txt); fi
+grep -hv -e '^#' -e '^$' "${lists[@]}" | sudo pacman -S --needed --noconfirm -
+
+say "System files"
+sudo install -Dm755 -t /usr/local/bin bin/yunagi-ai bin/yunagi-ai-usage
+if [ "$desktop" = yunagi ]; then
+    sudo rm -rf /usr/share/sddm/themes/yunagi
+    sudo cp -r sddm/yunagi /usr/share/sddm/themes/yunagi
+    sudo install -Dm644 sddm/sddm.conf.d/yunagi.conf /etc/sddm.conf.d/yunagi.conf
+fi
+
+say "Config"
+# Only files you do not have yet; the ones in ~/.config are yours to change
+while IFS= read -r -d '' f; do
+    dst=$HOME/${f#home/}
+    [ -e "$dst" ] || { install -D -m "$(stat -c %a "$f")" "$f" "$dst"; echo "New: ${dst#$HOME/}"; }
+done < <(if [ "$desktop" = yunagi ]; then find home -type f -print0
+         else find home/.config/kitty home/.config/fish home/.config/nvim home/Pictures -type f -print0; fi)
+mkdir -p "$HOME/.local/bin"
+for f in "$share"/bin/yunagi-*; do
+    case ${f##*/} in yunagi-ai|yunagi-ai-usage) continue ;; esac
+    [ -e "$HOME/.local/bin/${f##*/}" ] || ln -s "$f" "$HOME/.local/bin/${f##*/}"
+done
+
+restart_bar
+
+say "Updated to $(cat VERSION)"
