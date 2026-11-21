@@ -109,6 +109,9 @@ loads Yunagi's defaults; they win over the defaults.
 ## AI
 
 Menu → AI sets up an AI account without sudo, which shares `/home/delat` with you.
+Create account comes first: the user, the group `delat` and Yunagi's config in its
+home. The account can log in on a tty of its own (e.g. Ctrl+Alt+F3) and start its
+desktop with `start-hyprland`; Power → Switch user opens the login screen instead.
 Claude Code, Codex and Grok install and sign in there, in a terminal the menu
 opens, so their logins never reach your account. The same page installs Grok Bot
 and Hermes (from the AUR) and the shared terminal (`tmuxdela`, `tmuxdelaw`) through

@@ -14,6 +14,8 @@ Scope {
 
     readonly property var actions: [
         { icon: "\uf023", label: "Lock", cmd: ["hyprlock"] },
+        // Locks this session, then SDDM shows the login screen on a new VT for another user
+        { icon: "\uf0c0", label: "Switch user", cmd: ["sh", "-c", "hyprlock & sleep 0.5; busctl --system call org.freedesktop.DisplayManager /org/freedesktop/DisplayManager/Seat0 org.freedesktop.DisplayManager.Seat SwitchToGreeter"] },
         { icon: "\udb80\udf43", label: "Log out", cmd: ["sh", "-c", "command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"] },
         { icon: "\udb81\udc53", label: "Restart", cmd: ["systemctl", "reboot"] },
         { icon: "\uf011", label: "Shut down", cmd: ["systemctl", "poweroff"] }

@@ -4,6 +4,9 @@
 #   ./install.sh                        as the user, asks for sudo
 #   install.sh --user NAME [--desktop yunagi|gnome|minimal] [--apps] [--keyboard LAYOUT]
 #                                       as root, e.g. in arch-chroot from the ISO
+#   install.sh --config-only [--user NAME]
+#                                       only the config in the home, no packages or sudo
+#                                       (as root for another account, e.g. the AI account)
 #
 # yunagi: Hyprland with the Yunagi shell and SDDM. gnome: GNOME with GDM.
 # minimal: no desktop, only the network. yunagi and gnome share packages-common.txt.
@@ -16,6 +19,7 @@ user=$USER
 apps=ask
 keyboard=
 desktop=
+config_only=no
 while [ $# -gt 0 ]; do
     case $1 in
         --user) user=$2; shift ;;
@@ -23,6 +27,7 @@ while [ $# -gt 0 ]; do
         --no-apps) apps=no ;;
         --keyboard) keyboard=$2; shift ;;
         --desktop) desktop=$2; shift ;;
+        --config-only) config_only=yes ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -41,7 +46,7 @@ else
 fi
 
 if [ -z "$desktop" ]; then
-    if [ "$chroot" = yes ]; then
+    if [ "$chroot" = yes ] || [ "$config_only" = yes ]; then
         desktop=yunagi
     else
         read -rp "Desktop: yunagi, gnome or minimal? [yunagi] " desktop
@@ -62,6 +67,8 @@ firewall() {
         as_root install -Dm644 default/nftables.conf $f
     fi
 }
+
+if [ "$config_only" = no ]; then
 
 # --- Minimal: only the network and the firewall ---------------------------------
 
@@ -147,14 +154,22 @@ if [ -n "$keyboard" ]; then
         as_root install -Dm644 /dev/stdin /etc/X11/xorg.conf.d/00-keyboard.conf
 fi
 
+fi # config_only
+
 # --- User -------------------------------------------------------------------
 
 # Yunagi lives in ~/.local/share/yunagi; the files in ~/.config are the user's own copies
 share="$home/.local/share/yunagi"
 if [ "$repo" != "$share" ]; then
     as_user mkdir -p "$(dirname "$share")"
-    as_root rm -rf "$share"
-    as_user cp -a "$repo" "$share"
+    as_user rm -rf "$share"
+    if [ "$EUID" -eq 0 ]; then
+        # The repo may sit in another home the user cannot read
+        cp -a "$repo" "$share"
+        chown -R "$user:" "$share"
+    else
+        cp -a "$repo" "$share"
+    fi
 fi
 
 # Copy the config into the home directory; existing files that differ are backed up
@@ -165,7 +180,7 @@ while IFS= read -r -d '' f; do
     # Links from older installs that used stow
     p=$dst
     while [ "$p" != "$home" ]; do
-        if [ -L "$p" ] && [[ $(readlink "$p") == *yunagi/home/* ]]; then as_root rm "$p"; fi
+        if [ -L "$p" ] && [[ $(readlink "$p") == *yunagi/home/* ]]; then as_user rm "$p"; fi
         p=$(dirname "$p")
     done
     if [ -e "$dst" ] && ! cmp -s "$f" "$dst"; then

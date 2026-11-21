@@ -151,28 +151,38 @@ Scope {
             // Enter opens a terminal that does the job; ready rows have nothing to do
             const state = { install: "Install", setup: "Set up", ready: "Ready" };
             const stateIcon = { ready: "\uf00c", install: "\uf019", setup: "\uf019" };
+            const noAccount = !self && !account;
             const item = (key, label, detail) => ({
-                label: label, aiItem: key, detail: detail,
+                label: label, aiItem: key,
+                detail: noAccount && key !== "grokbot" && key !== "hermes" ? "Create the account first" : detail,
                 icon: aiBusy === key ? "\uf110" : stateIcon[aiStatus[key]] || "\uf105",
                 value: aiBusy === key ? "…" : state[aiStatus[key]] || "—",
-                disabled: aiBusy !== "" && aiBusy !== key
+                disabled: (aiBusy !== "" && aiBusy !== key) || (noAccount && key !== "grokbot" && key !== "hermes")
             });
-            const rows = [
+            const agents = [
                 { head: "Agents · " + (self ? account + " (you)" : account || aiName) },
                 item("claude", "Claude Code"), item("codex", "Codex"), item("grok", "Grok CLI"),
                 { head: "Usage" },
                 aiStatus.usage === "ready" ? { label: "Usage", icon: "\udb81\udea9", page: "aiusage" } : item("usage", "Usage")
             ];
-            if (self) return rows;
-            return rows.concat([
+            if (self) return agents;
+            // The account comes first: the agents, usage and tmux live in it
+            const accountRows = account ? [
+                { label: account, detail: "No sudo · Enter sets the password", icon: "\uf007",
+                  aiItem: "password", value: aiBusy === "password" ? "…" : undefined, disabled: aiBusy !== "" },
+                { label: "Yunagi config", detail: "Copies Hyprland, fish and kitty config to " + account, icon: "\uf0c5",
+                  aiItem: "config", value: aiBusy === "config" ? "…" : undefined, disabled: aiBusy !== "" }
+            ] : [
+                { label: aiName, detail: "Account name · Enter renames", icon: "\uf007",
+                  key: "ai_name", kind: "text", aiAccount: true },
+                { label: "Create account", detail: "User " + aiName + " without sudo, group delat and Yunagi config",
+                  icon: aiBusy === "account" ? "\uf110" : "\uf067", aiItem: "account",
+                  value: aiBusy === "account" ? "…" : "Create", disabled: aiBusy !== "" && aiBusy !== "account" }
+            ];
+            return [{ head: "Account" }].concat(accountRows, agents, [
+                item("tmux", "Shared terminal", "tmuxdela lets it watch, tmuxdelaw lets it type"),
                 { head: "Apps" },
-                item("grokbot", "Grok Bot"), item("hermes", "Hermes", "Never starts by itself"),
-                { head: "Account" },
-                account ? { label: account, detail: "No sudo · Enter sets the password for su", icon: "\uf007",
-                            aiItem: "password", value: aiBusy === "password" ? "…" : undefined, disabled: aiBusy !== "" }
-                        : { label: aiName, detail: "Created on the first set-up · Enter renames", icon: "\uf007",
-                            key: "ai_name", kind: "text", aiAccount: true },
-                item("tmux", "Shared terminal", "tmuxdela lets it watch, tmuxdelaw lets it type")
+                item("grokbot", "Grok Bot"), item("hermes", "Hermes", "Never starts by itself")
             ]);
         }
 
@@ -239,7 +249,7 @@ Scope {
     // A terminal sets the item up (sudo, sign-in links and codes happen there); the page
     // reads the states again when it closes
     function aiRun(row) {
-        if (aiBusy !== "" || (row.aiItem !== "password" && aiStatus[row.aiItem] === "ready")) return;
+        if (aiBusy !== "" || row.disabled || (row.aiItem !== "password" && row.aiItem !== "config" && aiStatus[row.aiItem] === "ready")) return;
         aiBusy = row.aiItem;
         error = "";
         aiProc.command = ["kitty", "--class", "bar-tui", "-o", "confirm_os_window_close=0", "-e",

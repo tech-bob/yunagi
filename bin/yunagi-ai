@@ -4,9 +4,10 @@
 #   yunagi-ai status            JSON for the menu: the AI account and the state of each item
 #   yunagi-ai do ITEM [NAME]    sets ITEM up in this terminal, with sudo where needed
 #
-# Items: claude, codex, grok (agents in the AI account), usage (the usage timers for
+# Items: account (creates the AI account, the group delat and the account's Yunagi
+# config), claude, codex, grok (agents in the AI account), usage (the usage timers for
 # the bar), grokbot, hermes (the admin's desktop apps, AUR), password (the AI account's,
-# for su), tmux (shared terminal). The AI account has no sudo; the agents and their
+# for su), tmux (shared terminal). The agents, usage and tmux need the account first. The AI account has no sudo; the agents and their
 # logins live in its home. Logged in as the AI account, only its own agents are set up.
 set -euo pipefail
 
@@ -61,6 +62,8 @@ status() {
     fi
     items+=("\"usage\":\"$s\"")
     if ! $self; then
+        [ -n "$ai" ] && s=ready || s=install
+        items+=("\"account\":\"$s\"")
         for k in grokbot hermes; do
             pacman -T "${pkg[$k]}" >/dev/null && s=ready || s=install
             items+=("\"$k\":\"$s\"")
@@ -75,6 +78,20 @@ status() {
 
 say() { printf '\n\e[1;36m%s\e[0m\n' "$*"; }
 
+# The AI account must exist before anything is set up in it
+need_account() {
+    ai=$(account)
+    [ -n "$ai" ] || { echo "Create the AI account first (Account in the AI page)."; return 1; }
+}
+
+# Yunagi's config (Hyprland, fish, kitty…) in the AI account, from your own copy
+account_config() {
+    local repo=$HOME/.local/share/yunagi
+    [ -x "$repo/install.sh" ] || { echo "No Yunagi copy in $repo; the config was not copied."; return 0; }
+    say "Yunagi config for $ai"
+    sudo "$repo/install.sh" --config-only --user "$ai"
+}
+
 # The AI account, the group delat and /home/delat; a name only matters the first time
 ensure_account() {
     ai=$(account)
@@ -84,10 +101,14 @@ ensure_account() {
         say "Creating the AI account $ai (no sudo)"
         sudo groupadd -f delat
         sudo useradd -m -G delat -s /usr/bin/fish "$ai"
+        created=yes
     fi
     if id -nG "$ai" | grep -qwE 'wheel|sudo'; then echo "$ai has sudo; the AI account must not."; return 1; fi
     id -nG "$ai" | grep -qw delat || sudo usermod -aG delat "$ai"
-    id -nG "$USER" | grep -qw delat || { sudo usermod -aG delat "$USER"; echo "Log out and in again: you were added to delat."; }
+    if ! id -nG "$USER" | grep -qw delat; then
+        sudo usermod -aG delat "$USER"
+        echo "You were added to delat; it takes effect at your next login."
+    fi
     [ -d "$shared" ] || sudo install -d -m 2775 -o root -g delat "$shared"
     [ "$(cat "$conf" 2>/dev/null)" = "$ai" ] || echo "$ai" | sudo install -Dm644 /dev/stdin "$conf"
     # The agents live in ~/.local/bin and ~/.grok/bin
@@ -95,6 +116,8 @@ ensure_account() {
         */fish) sudo -u "$ai" -H sh -c 'f=~/.config/fish/conf.d/yunagi-ai.fish; [ -e $f ] || { mkdir -p ${f%/*}; echo "fish_add_path -g ~/.local/bin ~/.grok/bin" >$f; }' ;;
         *) sudo -u "$ai" -H sh -c 'grep -qs yunagi-ai ~/.bashrc || echo "export PATH=\"\$HOME/.local/bin:\$HOME/.grok/bin:\$PATH\"  # yunagi-ai" >>~/.bashrc' ;;
     esac
+    [ "${created:-}" = yes ] && account_config
+    return 0
 }
 
 # Runs a command as the AI account, or as yourself when you are it
@@ -184,6 +207,11 @@ shared_terminal() {
 function tmuxdela --description 'tmux shared with the AI account, read-only (tmuxdela w: writable)'
     set -l sock /home/delat/terminal/delad
     set -l ai (cat /etc/yunagi/ai-user)
+    # Added to delat during this login: the session does not have the group yet
+    if not contains delat (id -Gn)
+        sg delat -c "fish -c 'tmuxdela $argv'"
+        return
+    end
     set -l mode r
     test "$argv[1]" = w; and set mode w
     if set -q TMUX
@@ -202,11 +230,13 @@ do_item() {
     local item=$1 name=${2:-}
     ai=$USER
     case $item in
-        claude|codex|grok) is_ai || ensure_account "$name"; agent "$item" ;;
-        usage) is_ai || ensure_account "$name"; ensure_usage ;;
+        account) ensure_account "$name"; say "Password for $ai (for logging in and su $ai)"; sudo passwd "$ai" ;;
+        config) need_account; account_config ;;
+        claude|codex|grok) is_ai || need_account; agent "$item" ;;
+        usage) is_ai || need_account; ensure_usage ;;
         grokbot|hermes) aur "$item"; ensure_own_usage ;;
-        password) ensure_account "$name"; say "Password for $ai (for su $ai)"; sudo passwd "$ai" ;;
-        tmux) ensure_account "$name"; shared_terminal ;;
+        password) need_account; say "Password for $ai (for su $ai)"; sudo passwd "$ai" ;;
+        tmux) need_account; shared_terminal ;;
         *) echo "Unknown item: $item"; return 1 ;;
     esac
 }
