@@ -16,7 +16,8 @@ say() { printf '\n\e[1;36m%s\e[0m\n' "$*"; }
 
 restart_bar() {
     [ "$desktop" = yunagi ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] || return 0
-    say "Restarting the bar"
+    say "Reloading Hyprland and restarting the bar"
+    hyprctl reload >/dev/null
     pkill -u "$USER" -x qs || true; pkill -u "$USER" -x quickshell || true
     sleep 1
     hyprctl dispatch "hl.dsp.exec_cmd('qs -n -d')" >/dev/null
