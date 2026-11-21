@@ -226,7 +226,7 @@ function tmuxdela --description 'tmux shared with the AI account, read-only (tmu
     set -l sock /home/delat/terminal/delad
     set -l ai (cat /etc/yunagi/ai-user)
     # Added to delat during this login: the session gets the group at the next login
-    if not contains delat (id -Gn)
+    if not contains delat (id -Gn | string split " ")
         echo "Restart the computer first: delat is new since you logged in."
         return 1
     end

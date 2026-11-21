@@ -18,6 +18,7 @@ nano
 
 # System
 python
+git
 plymouth
 gnome-keyring
 pipewire
