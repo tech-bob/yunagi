@@ -64,6 +64,11 @@ status() {
     if ! $self; then
         [ -n "$ai" ] && s=ready || s=install
         items+=("\"account\":\"$s\"")
+        # The AI account's home and /etc/shadow are closed: marks in /etc/yunagi tell
+        [ -n "$ai" ] && [ "$(cat /etc/yunagi/ai-config 2>/dev/null)" = "$ai" ] && s=ready || s=install
+        items+=("\"config\":\"$s\"")
+        [ -n "$ai" ] && [ "$(cat /etc/yunagi/ai-password 2>/dev/null)" = "$ai" ] && s=ready || s=setup
+        items+=("\"password\":\"$s\"")
         for k in grokbot hermes; do
             pacman -T "${pkg[$k]}" >/dev/null && s=ready || s=install
             items+=("\"$k\":\"$s\"")
@@ -90,6 +95,13 @@ account_config() {
     [ -x "$repo/install.sh" ] || { echo "No Yunagi copy in $repo; the config was not copied."; return 0; }
     say "Yunagi config for $ai"
     sudo "$repo/install.sh" --config-only --user "$ai"
+    echo "$ai" | sudo install -Dm644 /dev/stdin /etc/yunagi/ai-config
+}
+
+set_password() {
+    say "Password for $ai (for logging in and su $ai)"
+    sudo passwd "$ai"
+    echo "$ai" | sudo install -Dm644 /dev/stdin /etc/yunagi/ai-password
 }
 
 # The AI account, the group delat and /home/delat; a name only matters the first time
@@ -230,12 +242,12 @@ do_item() {
     local item=$1 name=${2:-}
     ai=$USER
     case $item in
-        account) ensure_account "$name"; say "Password for $ai (for logging in and su $ai)"; sudo passwd "$ai" ;;
+        account) ensure_account "$name"; set_password ;;
         config) need_account; account_config ;;
         claude|codex|grok) is_ai || need_account; agent "$item" ;;
         usage) is_ai || need_account; ensure_usage ;;
         grokbot|hermes) aur "$item"; ensure_own_usage ;;
-        password) need_account; say "Password for $ai (for su $ai)"; sudo passwd "$ai" ;;
+        password) need_account; set_password ;;
         tmux) need_account; shared_terminal ;;
         *) echo "Unknown item: $item"; return 1 ;;
     esac

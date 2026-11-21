@@ -167,20 +167,27 @@ Scope {
             ];
             if (self) return agents;
             // The account comes first: the agents, usage and tmux live in it
+            const action = (key, label, detail, icon) => ({
+                label: label, detail: detail, aiItem: key, icon: aiBusy === key ? "\uf110" : icon,
+                value: aiBusy === key ? "…" : undefined, disabled: aiBusy !== "" && aiBusy !== key
+            });
+            // Done steps disappear; the account itself stays as a ready row
             const accountRows = account ? [
-                { label: account, detail: "No sudo · Enter sets the password", icon: "\uf007",
-                  aiItem: "password", value: aiBusy === "password" ? "…" : undefined, disabled: aiBusy !== "" },
-                { label: "Yunagi config", detail: "Copies Hyprland, fish and kitty config to " + account, icon: "\uf0c5",
-                  aiItem: "config", value: aiBusy === "config" ? "…" : undefined, disabled: aiBusy !== "" }
-            ] : [
+                { label: account, detail: "No sudo", icon: "\uf007", value: "Ready", info: true },
+                aiStatus.password === "ready"
+                    ? action("password", "Change password", "For logging in and su " + account, "\uf084")
+                    : action("password", "Set password", "For logging in and su " + account, "\uf084")
+            ].concat(aiStatus.config === "ready" ? [] :
+                [action("config", "Yunagi config", "Copies Hyprland, fish and kitty config to " + account, "\uf0c5")])
+            : [
                 { label: aiName, detail: "Account name · Enter renames", icon: "\uf007",
                   key: "ai_name", kind: "text", aiAccount: true },
                 { label: "Create account", detail: "User " + aiName + " without sudo, group delat and Yunagi config",
                   icon: aiBusy === "account" ? "\uf110" : "\uf067", aiItem: "account",
                   value: aiBusy === "account" ? "…" : "Create", disabled: aiBusy !== "" && aiBusy !== "account" }
             ];
-            return [{ head: "Account" }].concat(accountRows, agents, [
-                item("tmux", "Shared terminal", "tmuxdela lets it watch, tmuxdelaw lets it type"),
+            return [{ head: "Account" }].concat(accountRows, agents,
+                aiStatus.tmux === "ready" ? [] : [item("tmux", "Shared terminal", "tmuxdela lets it watch, tmuxdelaw lets it type")], [
                 { head: "Apps" },
                 item("grokbot", "Grok Bot"), item("hermes", "Hermes", "Never starts by itself")
             ]);
