@@ -56,7 +56,7 @@ Your own config is left alone. The first run on an install from the ISO turns
 Older installs without `yunagi-update`:
 
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/tech-bob/yunagi/main/bin/yunagi-update)
+curl -fsSLo /tmp/yunagi-update https://raw.githubusercontent.com/tech-bob/yunagi/main/bin/yunagi-update && bash /tmp/yunagi-update
 ```
 
 Optional flags (useful from the ISO chroot or scripts):
