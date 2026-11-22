@@ -6,7 +6,12 @@
 # that differs. After that: git pull, then whatever changed since the last update that
 # finished: new packages, the system files, the packages tool, config files that are
 # new in Yunagi (your own copies are left alone), and a restart of the bar.
+# The AI account's copy and config are updated as well (--user-only, run as it).
 set -euo pipefail
+
+# --user-only: only this account's copy and config, no sudo (the AI account)
+user_only=no
+[ "${1:-}" = --user-only ] && user_only=yes
 
 url=https://github.com/tech-bob/yunagi
 share=$HOME/.local/share/yunagi
@@ -25,6 +30,17 @@ restart_bar() {
 
 # The newest release tag
 latest() { git -C "$share" tag -l 'v*' --sort=-v:refname | head -1; }
+
+# The AI account, after your own update finished; it has no sudo, so only its home
+update_ai() {
+    local ai
+    ai=$(cat /etc/yunagi/ai-user 2>/dev/null || true)
+    [ "$user_only" = no ] && [ -n "$ai" ] && [ "$ai" != "$USER" ] && id "$ai" &>/dev/null || return 0
+    say "The AI account $ai"
+    sudo -u "$ai" -H sh -c 'cd && exec bash -s -- --user-only' <"$share/bin/yunagi-update" ||
+        echo "The AI account was not updated."
+}
+trap '[ $? -eq 0 ] && update_ai' EXIT
 
 done_at() { mkdir -p "${state%/*}"; git -C "$share" rev-parse HEAD >"$state"; }
 
@@ -45,7 +61,8 @@ if [ ! -d "$share/.git" ]; then
     mv "$tmp/yunagi" "$share"
     rmdir "$tmp"
     git -C "$share" checkout -q "$(latest)"
-    "$share/install.sh" --desktop "$desktop" --no-apps
+    if [ "$user_only" = yes ]; then "$share/install.sh" --config-only
+    else "$share/install.sh" --desktop "$desktop" --no-apps; fi
     done_at
     restart_bar
     exit 0
@@ -69,11 +86,8 @@ fi
 git log --oneline "$before..HEAD"
 changed() { ! git diff --quiet "$before" HEAD -- "$@"; }
 
-if [ "$desktop" = minimal ]; then
-    done_at
-    say "Updated to $(cat VERSION)"
-    exit 0
-fi
+if [ "$desktop" = minimal ] || [ "$user_only" = yes ]; then :
+else
 
 # Only packages not installed yet, with the system brought up to date (no partial upgrade)
 lists=(packages-common.txt)
@@ -106,6 +120,9 @@ if changed yunagi-pkg; then
     rm -rf "$build"
     [ -n "$had_rust" ] || sudo pacman -Rns --noconfirm rust
 fi
+
+fi # system
+[ "$desktop" = minimal ] && { done_at; say "Updated to $(cat VERSION)"; exit 0; }
 
 # Only files you do not have yet; the ones in ~/.config are yours to change
 while IFS= read -r -d '' f; do
