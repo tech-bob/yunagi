@@ -42,11 +42,10 @@
   screensaver via hypridle at 5 min, lock 10 min, screens off 30 s after lock).
   AI and AI Usage (`yunagi-ai menu`, `yunagi-ai-usage show`) work but are plain;
   make them nicer, maybe a Plasma panel widget for usage like the bar's robot.
-  Panel in the bar's style (top, floating, 40 px, #04090a at 65 %, square corners)
-  needs Panel Colorizer (GPL-3, KDE Store/AUR): ship it in `kde/` plus a layout
-  template; bob's own panel is in dotfiles `KDE_DESKTOP`. Panel Colorizer settings
-  for both looks are in `kde/panel/`: `yunagi-style.json` (chosen) and
-  `kde-native.json` (KDE's own background, tried on burken 2026-11-22).
+  Panel: no Panel Colorizer; opaque (dark Plasma style), floating, 32 px via
+  `kde/panel/opaque.js` (bob 2026-11-22); ship a layout template. bob's own panel is
+  in dotfiles `KDE_DESKTOP`. The earlier Panel Colorizer looks are kept in
+  `kde/panel/` (`yunagi-style.json`, `kde-native.json`).
   yunagi-update picks the desktop from the login manager (SDDM → Yunagi), so a
   KDE-only install would get Hyprland's packages: record the chosen desktops at
   install (e.g. /etc/yunagi/desktops) and update by that; `kde/` is not updated yet.
