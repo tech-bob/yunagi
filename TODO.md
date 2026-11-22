@@ -43,7 +43,9 @@
   make them nicer, maybe a Plasma panel widget for usage like the bar's robot.
   Panel in the bar's style (top, floating, 40 px, #04090a at 65 %, square corners)
   needs Panel Colorizer (GPL-3, KDE Store/AUR): ship it in `kde/` plus a layout
-  template; bob's own panel is in dotfiles `KDE_DESKTOP`.
+  template; bob's own panel is in dotfiles `KDE_DESKTOP`. Panel Colorizer settings
+  for both looks are in `kde/panel/`: `yunagi-style.json` (chosen) and
+  `kde-native.json` (KDE's own background, tried on burken 2026-11-22).
 - **Language choice** (Swedish, English, Norwegian, Danish).
 
 # Later, maybe
