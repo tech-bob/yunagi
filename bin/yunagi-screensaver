@@ -20,6 +20,7 @@ workspace.windowAdded.connect(function (w) {
     var free = workspace.screens.filter(function (s) { return used.indexOf(s.name) < 0; });
     if (free.length) workspace.sendClientToScreen(w, free[0]);
     w.fullScreen = true;
+    w.keepAbove = true;
 });
 """
 
@@ -38,11 +39,11 @@ if "--run" not in sys.argv:
         kwin = lambda m, *a: subprocess.run(["gdbus", "call", "--session", "--dest", "org.kde.KWin",
             "--object-path", "/Scripting", "--method", f"org.kde.kwin.Scripting.{m}", *a],
             capture_output=True, text=True).stdout
-        if "true" not in kwin("isScriptLoaded", "yunagi-screensaver"):
-            js = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "yunagi-screensaver-kwin.js"
-            js.write_text(KWIN_JS)
-            kwin("loadScript", str(js), "yunagi-screensaver")
-            kwin("start")
+        js = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "yunagi-screensaver-kwin.js"
+        js.write_text(KWIN_JS)
+        kwin("unloadScript", "yunagi-screensaver")
+        kwin("loadScript", str(js), "yunagi-screensaver")
+        kwin("start")
         try:
             out = subprocess.run(["kscreen-doctor", "-j"], capture_output=True, text=True).stdout
             n = sum(1 for o in json.loads(out)["outputs"] if o.get("enabled"))
