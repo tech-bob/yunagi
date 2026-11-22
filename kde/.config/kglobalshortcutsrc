@@ -1,0 +1,20 @@
+[kwin]
+Window Close=Meta+C\tAlt+F4,Alt+F4,Close Window
+Switch to Desktop 1=Meta+1,Ctrl+F1,Switch to Desktop 1
+Switch to Desktop 2=Meta+2,Ctrl+F2,Switch to Desktop 2
+Switch to Desktop 3=Meta+3,Ctrl+F3,Switch to Desktop 3
+Switch to Desktop 4=Meta+4,Ctrl+F4,Switch to Desktop 4
+Switch to Desktop 5=Meta+5,,Switch to Desktop 5
+Switch to Desktop 6=Meta+6,,Switch to Desktop 6
+
+[services][kitty.desktop]
+_launch=Meta+Return
+
+[services][org.gnome.Nautilus.desktop]
+_launch=Meta+E
+
+[services][org.kde.konsole.desktop]
+_launch=none
+
+[services][org.kde.dolphin.desktop]
+_launch=none

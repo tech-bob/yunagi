@@ -1,0 +1,12 @@
+[General]
+count=1
+rules=yunagi-opacity
+
+[yunagi-opacity]
+Description=Yunagi: kitty and Files transparent
+opacityactive=92
+opacityactiverule=2
+opacityinactive=85
+opacityinactiverule=2
+wmclass=^(kitty|org\\.gnome\\.Nautilus)$
+wmclassmatch=3
