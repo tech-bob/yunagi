@@ -126,8 +126,9 @@ as_root install -Dm755 -t /usr/local/bin bin/yunagi-ai bin/yunagi-ai-usage
 
 if [ "$desktop" = yunagi ]; then
     # Login: SDDM with the Yunagi theme, active from the next boot
-    as_root rm -rf /usr/share/sddm/themes/yunagi
-    as_root cp -r sddm/yunagi /usr/share/sddm/themes/yunagi
+    # Files of your own there (theme.conf.user, a video) stay
+    as_root install -d /usr/share/sddm/themes/yunagi
+    as_root cp -r sddm/yunagi/. /usr/share/sddm/themes/yunagi/
     as_root install -Dm644 sddm/sddm.conf.d/yunagi.conf /etc/sddm.conf.d/yunagi.conf
     as_root systemctl enable sddm
 else

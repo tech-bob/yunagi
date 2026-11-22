@@ -104,8 +104,9 @@ if changed bin/yunagi-ai bin/yunagi-ai-usage; then
 fi
 if [ "$desktop" = yunagi ] && changed sddm; then
     say "Login screen"
-    sudo rm -rf /usr/share/sddm/themes/yunagi
-    sudo cp -r sddm/yunagi /usr/share/sddm/themes/yunagi
+    # Files of your own there (theme.conf.user, a video) stay
+    sudo install -d /usr/share/sddm/themes/yunagi
+    sudo cp -r sddm/yunagi/. /usr/share/sddm/themes/yunagi/
     sudo install -Dm644 sddm/sddm.conf.d/yunagi.conf /etc/sddm.conf.d/yunagi.conf
 fi
 
