@@ -2,11 +2,18 @@
 set -e
 
 case "${1:-output}" in
-    region)
+    region|shared)
         hyprpicker -r -z & pick=$!
         sleep 0.2
         geom=$(slurp -d) || { kill $pick; exit 1; }
-        grim -g "$geom" - | wl-copy --type image/png
+        if [ "$1" = shared ]; then
+            # Also saved where the AI account can read it, as Meta+S in KDE
+            file=/home/delat/screenshots/Screenshot_$(date +%Y%m%d_%H%M%S).png
+            grim -g "$geom" "$file" || { kill $pick; exit 1; }
+            wl-copy --type image/png < "$file"
+        else
+            grim -g "$geom" - | wl-copy --type image/png
+        fi
         kill $pick
         ;;
     *)
