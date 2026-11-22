@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=About Yunagi
+Comment=The Yunagi mark and system information
+Exec=sh -c 'exec kitty --class yunagi-about -o font_size=11 -o background_opacity=1 -o confirm_os_window_close=0 -e "$HOME/.local/bin/yunagi-about"'
+Icon=yunagi
+Terminal=false
+Categories=System;

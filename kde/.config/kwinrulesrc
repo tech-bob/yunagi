@@ -1,6 +1,6 @@
 [General]
-count=1
-rules=yunagi-opacity
+count=2
+rules=yunagi-opacity,yunagi-about
 
 [yunagi-opacity]
 Description=Yunagi: kitty and Files transparent
@@ -10,3 +10,12 @@ opacityinactive=85
 opacityinactiverule=2
 wmclass=^(kitty|org\\.gnome\\.Nautilus)$
 wmclassmatch=3
+
+[yunagi-about]
+Description=Yunagi: About centred
+wmclass=^yunagi-about$
+wmclassmatch=3
+placement=5
+placementrule=2
+size=1040,640
+sizerule=2
