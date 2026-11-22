@@ -1,14 +1,23 @@
 [General]
-count=3
-rules=yunagi-opacity,yunagi-about,yunagi-ai
+count=4
+rules=yunagi-opacity,yunagi-files,yunagi-about,yunagi-ai
 
 [yunagi-opacity]
-Description=Yunagi: kitty and Files transparent
+Description=Yunagi: kitty transparent
 opacityactive=92
 opacityactiverule=2
 opacityinactive=85
 opacityinactiverule=2
-wmclass=^(kitty|org\\.gnome\\.Nautilus)$
+wmclass=^kitty$
+wmclassmatch=3
+
+[yunagi-files]
+Description=Yunagi: Files slightly transparent
+opacityactive=97
+opacityactiverule=2
+opacityinactive=94
+opacityinactiverule=2
+wmclass=^org\\.gnome\\.Nautilus$
 wmclassmatch=3
 
 [yunagi-about]
