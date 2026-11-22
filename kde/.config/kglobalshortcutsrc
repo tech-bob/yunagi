@@ -20,6 +20,7 @@ _launch=Meta+B
 _launch=Meta+U
 
 [services][org.kde.spectacle.desktop]
+_launch=Print
 RectangularRegionScreenShot=Meta+S
 
 [services][yunagi-screenshot-shared.desktop]
