@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Yunagi screensaver
+Exec=sh -c 'exec hypridle -c "$HOME/.config/hypr/hypridle-plasma.conf"'
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

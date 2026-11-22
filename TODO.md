@@ -38,7 +38,8 @@
 - **KDE** as a third desktop (`packages-kde.txt`): KDE only, Hyprland not installed
   unless chosen beside it, as with GNOME; KWallet off, gnome-keyring in every desktop;
   `~/.config/plasma-workspace/env/yunagi.sh` for Plasma after Hyprland. Config to
-  copy into ~/.config is in `kde/` (window rule, shortcuts as in Hyprland, KWallet off).
+  copy into ~/.config is in `kde/` (window rule, shortcuts as in Hyprland, KWallet off,
+  screensaver via hypridle at 5 min, lock 10 min, screens off 30 s after lock).
   AI and AI Usage (`yunagi-ai menu`, `yunagi-ai-usage show`) work but are plain;
   make them nicer, maybe a Plasma panel widget for usage like the bar's robot.
   Panel in the bar's style (top, floating, 40 px, #04090a at 65 %, square corners)

@@ -16,6 +16,15 @@ if "--run" not in sys.argv:
         open(os.environ["YUNAGI_SS_LOG"], "a").write(f"{time.strftime('%T')} launcher\n")
     if subprocess.run(["pgrep", "-f", "yunagi-screensave[r] --run"], capture_output=True).returncode == 0:
         sys.exit(0)
+    kitty = ["kitty", "--class", "yunagi-screensaver",
+        "-o", "background=#08080a", "-o", "background_opacity=1",
+        "-o", "window_padding_width=0", "-o", "confirm_os_window_close=0",
+        "-o", "font_size=13"]
+    # Outside Hyprland (Plasma): one fullscreen kitty on the active monitor
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        subprocess.Popen([*kitty, "--start-as=fullscreen", os.path.abspath(__file__), "--run"],
+            start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sys.exit(0)
     # One fullscreen kitty per monitor: focus each monitor, open, wait for the window
     import json
     hy = lambda *a: subprocess.run(["hyprctl", *a], capture_output=True, text=True).stdout
@@ -29,10 +38,7 @@ if "--run" not in sys.argv:
         if m:
             hy("dispatch", f"hl.dsp.focus({{monitor='{m['name']}'}})")
         n = count()
-        subprocess.Popen(["kitty", "--class", "yunagi-screensaver",
-            "-o", "background=#08080a", "-o", "background_opacity=1",
-            "-o", "window_padding_width=0", "-o", "confirm_os_window_close=0",
-            "-o", "font_size=13", os.path.abspath(__file__), "--run"], start_new_session=True,
+        subprocess.Popen([*kitty, os.path.abspath(__file__), "--run"], start_new_session=True,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(40):
             if count() > n:
