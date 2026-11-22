@@ -81,6 +81,7 @@ Optional flags (useful from the ISO chroot or scripts):
 | `Super+U` | AI usage |
 | `Super+E` | File manager |
 | `Super+W` | Firefox |
+| `Super+H` | Hermes (when installed from the AI page) |
 | `Super+Shift+F` | Float or tile the window |
 | `Super`+left drag | Move a floating window |
 | `Super`+right drag, `Super+Alt`+left drag | Resize a window (the second for touchpads) |
