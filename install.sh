@@ -185,10 +185,15 @@ if [ "$repo" != "$share" ]; then
     fi
 fi
 
+# Shared media in /home/delat; ~/Pictures/wallpapers becomes a link there (needs root,
+# so not for --config-only as the user)
+if [ "$config_only" = no ] || [ "$EUID" -eq 0 ]; then as_root "$repo/shared-media.sh" "$user"; fi
+
 # Copy the config into the home directory; existing files that differ are backed up
 backup="$home/.yunagi-backup-$(date +%F-%H%M%S)"
 while IFS= read -r -d '' f; do
     rel=${f#home/}
+    [[ $rel == Pictures/wallpapers/* && -L $home/Pictures/wallpapers ]] && continue
     dst="$home/$rel"
     # Links from older installs that used stow
     p=$dst

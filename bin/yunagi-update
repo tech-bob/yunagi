@@ -122,12 +122,19 @@ if changed yunagi-pkg; then
     [ -n "$had_rust" ] || sudo pacman -Rns --noconfirm rust
 fi
 
+# Shared media in /home/delat, for you and the AI account
+if [ ! -L "$HOME/Pictures/wallpapers" ] || changed shared-media.sh home/Pictures; then
+    say "Shared media in /home/delat"
+    sudo ./shared-media.sh "$USER" $(cat /etc/yunagi/ai-user 2>/dev/null || true)
+fi
+
 fi # system
 [ "$desktop" = minimal ] && { done_at; say "Updated to $(cat VERSION)"; exit 0; }
 
 # Only files you do not have yet; the ones in ~/.config are yours to change
 while IFS= read -r -d '' f; do
     dst=$HOME/${f#home/}
+    [[ $f == home/Pictures/wallpapers/* && -L $HOME/Pictures/wallpapers ]] && continue
     [ -e "$dst" ] || { install -D -m "$(stat -c %a "$f")" "$f" "$dst"; echo "New: ${dst#"$HOME"/}"; }
 done < <(if [ "$desktop" = yunagi ]; then find home -type f -print0
          else find home/.vimrc home/.config/kitty home/.config/fish home/.config/nvim home/Pictures -type f -print0; fi)
