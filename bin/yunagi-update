@@ -125,7 +125,7 @@ fi
 # Shared media in /home/delat, for you and the AI account
 if [ ! -L "$HOME/Pictures/wallpapers" ] || changed shared-media.sh home/Pictures; then
     say "Shared media in /home/delat"
-    sudo ./shared-media.sh "$USER" $(cat /etc/yunagi/ai-user 2>/dev/null || true)
+    sudo bash ./shared-media.sh "$USER" $(cat /etc/yunagi/ai-user 2>/dev/null || true)
 fi
 
 fi # system
