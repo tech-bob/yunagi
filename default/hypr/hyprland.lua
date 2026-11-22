@@ -522,6 +522,18 @@ hl.window_rule({
     size   = "875 600",
 })
 
+-- Bitwarden's popout in Firefox: every Firefox window has the class firefox, so it is
+-- caught by its title, which is set only after the window opens
+local function bitwarden_popout(w)
+    if not w or w.class ~= "firefox" or w.floating or not w.title:find("^Extension: %(Bitwarden") then return end
+    local sel = "address:" .. w.address
+    hl.dispatch(hl.dsp.window.float({ action = "enable", window = sel }))
+    hl.dispatch(hl.dsp.window.resize({ x = 420, y = 640, window = sel }))
+    hl.dispatch(hl.dsp.window.center({ window = sel }))
+end
+hl.on("window.title", bitwarden_popout)
+hl.on("window.open", bitwarden_popout)
+
 -- Terminals and Files: 0.92 when focused, 0.85 otherwise
 hl.window_rule({
     name    = "transparent-windows-opacity",
