@@ -8,7 +8,9 @@ case "${1:-output}" in
         geom=$(slurp -d) || { kill $pick; exit 1; }
         if [ "$1" = shared ]; then
             # Only saved where the AI account can read it, not to the clipboard
-            grim -g "$geom" /home/delat/screenshots/Screenshot_$(date +%Y%m%d_%H%M%S).png || { kill $pick; exit 1; }
+            file=/home/delat/screenshots/Screenshot_$(date +%Y%m%d_%H%M%S).png
+            grim -g "$geom" "$file" || { kill $pick; exit 1; }
+            notify-send -i "$file" "Screenshot saved" "$file" &
         else
             grim -g "$geom" - | wl-copy --type image/png
         fi
