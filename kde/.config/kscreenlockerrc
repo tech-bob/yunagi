@@ -1,0 +1,6 @@
+[Greeter]
+WallpaperPlugin=org.kde.image
+
+[Greeter][Wallpaper][org.kde.image][General]
+Image[$e]=file://$HOME/Pictures/wallpapers/jonatan-pie-3l3RwQdHRHg-unsplash.jpg
+PreviewImage[$e]=file://$HOME/Pictures/wallpapers/jonatan-pie-3l3RwQdHRHg-unsplash.jpg
