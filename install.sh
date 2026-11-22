@@ -94,7 +94,6 @@ pkgs "${lists[@]}"
 
 # Boot: Ion for existing Limine installs (Limine menu and Plymouth splash).
 as_root python3 boot/configure.py
-[ "$(getent passwd "$user" | cut -d: -f7)" = /usr/bin/fish ] || as_root chsh -s /usr/bin/fish "$user"
 
 firewall
 svc_enable NetworkManager bluetooth power-profiles-daemon nftables
@@ -155,6 +154,11 @@ if [ -n "$keyboard" ]; then
 fi
 
 fi # config_only
+
+# fish as the shell; config-only too when run as root (the AI account)
+if [ "$config_only" = no ] || [ "$EUID" -eq 0 ]; then
+    [ "$(getent passwd "$user" | cut -d: -f7)" = /usr/bin/fish ] || as_root chsh -s /usr/bin/fish "$user"
+fi
 
 # --- User -------------------------------------------------------------------
 

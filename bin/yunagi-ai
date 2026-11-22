@@ -100,7 +100,11 @@ account_config() {
     local repo=$HOME/.local/share/yunagi
     [ -x "$repo/install.sh" ] || { echo "No Yunagi copy in $repo; the config was not copied."; return 0; }
     say "Yunagi config for $ai"
-    sudo "$repo/install.sh" --config-only --user "$ai"
+    # Your keyboard layout: from the settings menu, else the system's
+    local kb
+    kb=$(sed -n 's/^ *kb_layout = "\(.*\)",$/\1/p' "$HOME/.config/hypr/settings.lua" 2>/dev/null)
+    [ -n "$kb" ] || kb=$(localectl status | sed -n 's/^ *X11 Layout: //p')
+    sudo "$repo/install.sh" --config-only --user "$ai" ${kb:+--keyboard "$kb"}
     echo "$ai" | sudo install -Dm644 /dev/stdin /etc/yunagi/ai-config
 }
 
