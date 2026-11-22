@@ -17,3 +17,4 @@ breeze-gtk
 # Screenshots (Spectacle's text recognition needs one language)
 spectacle
 tesseract-data-eng
+hypridle
