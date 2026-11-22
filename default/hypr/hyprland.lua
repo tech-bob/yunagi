@@ -52,7 +52,9 @@ local menu        = "qs ipc call launcher toggle"
 -- Or execute your favorite apps at launch like this:
 --
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("systemctl --user import-environment QT_QPA_PLATFORM QT_QPA_PLATFORMTHEME GTK_THEME WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
+  -- Only what the portals need: the user manager outlives the session, and theme
+  -- variables left there break Plasma (black screen) when logging in to it afterwards
+  hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
   hl.exec_cmd("systemctl --user stop hyprpolkitagent")
   -- The password prompt (polkit agent) is Quickshell's own, PolkitPrompt.qml
   hl.exec_cmd("hyprpaper")
