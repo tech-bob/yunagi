@@ -8,6 +8,9 @@ percentages are written. Claude: Anthropic's OAuth usage endpoint. Codex: the
 Codex app-server. Grok CLI: _x.ai/billing over `grok agent stdio`. Grok Bot:
 Cursor's GetSandUsageStatus with the app's own token. An agent that cannot be
 read keeps its last numbers, marked stale.
+
+yunagi-ai-usage show: the numbers in a terminal (the AI account's and your own),
+for desktops without Yunagi's bar; read again every minute, any key closes.
 """
 
 import base64
@@ -201,5 +204,56 @@ def main():
     tmp.replace(OUT)
 
 
+def show():
+    import sys, termios, tty
+    files = [Path("/home/delat/ai-usage.json"),
+             Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local/state") / "yunagi/ai-usage.json"]
+
+    def left(at):
+        mins = max(0, int((datetime.fromisoformat(at) - datetime.now(timezone.utc)).total_seconds() // 60))
+        return f"{mins // 1440}d {mins % 1440 // 60}h" if mins >= 1440 else f"{mins // 60}h {mins % 60}m"
+
+    def draw():
+        out = ["\033[2J\033[H"]
+        seen = set()
+        for f in files:
+            try:
+                doc = json.loads(f.read_text())
+            except (OSError, ValueError):
+                continue
+            for a in doc.get("agents", []):
+                if a["id"] in seen:
+                    continue
+                seen.add(a["id"])
+                note = "  · old numbers" if a.get("stale") else ""
+                out.append(f"\n \033[1m{a['name']}\033[0m  \033[2m{a.get('plan', '')}{note}\033[0m")
+                for lim in a.get("limits", []):
+                    used = max(0.0, min(1.0, lim["used"]))
+                    n = round(used * 24)
+                    colour = "31" if used >= 0.9 else "33" if used >= 0.7 else "36"
+                    reset = f"resets in {left(lim['resetsAt'])}" if lim.get("resetsAt") else ""
+                    out.append(f"   {lim['label']:<8} \033[{colour}m{'█' * n}{'░' * (24 - n)}\033[0m"
+                               f" {used * 100:3.0f} %   \033[2m{reset}\033[0m")
+        if not seen:
+            out.append("\n No usage yet: set up Usage in the AI menu.")
+        out.append("\n\n \033[2mUpdates every 5 minutes · any key closes\033[0m")
+        sys.stdout.write("\n".join(out))
+        sys.stdout.flush()
+
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        sys.stdout.write("\033[?25l")
+        while True:
+            draw()
+            if select.select([sys.stdin], [], [], 60)[0]:
+                break
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+        sys.stdout.write("\033[?25h\n")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    show() if sys.argv[1:] == ["show"] else main()

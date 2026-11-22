@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AI Usage
+Comment=Usage limits of the AI agents
+Exec=kitty --class yunagi-ai -o confirm_os_window_close=0 -e /usr/local/bin/yunagi-ai-usage show
+Icon=yunagi
+Terminal=false
+Categories=System;

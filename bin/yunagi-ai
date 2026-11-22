@@ -3,6 +3,7 @@
 #
 #   yunagi-ai status            JSON for the menu: the AI account and the state of each item
 #   yunagi-ai do ITEM [NAME]    sets ITEM up in this terminal, with sudo where needed
+#   yunagi-ai menu              the AI page in a terminal, for desktops without Yunagi's menu
 #
 # Items: account (creates the AI account, the group delat and the account's Yunagi
 # config), own (the agents in your own account instead, no AI account), claude, codex, grok (agents in the AI account), usage (the usage timers for
@@ -266,11 +267,45 @@ do_item() {
     esac
 }
 
+# The AI page as a terminal menu (gum): the same rows as in Yunagi's menu
+menu() {
+    local rows choice key name
+    while true; do
+        rows=$(status | python3 -I -c '
+import json, sys
+s = json.load(sys.stdin)
+st = {"install": "Install", "setup": "Set up", "ready": "Ready"}
+def row(k, label): print(f"{k}\t{label:<22}{st.get(s.get(k), str())}")
+if not s["self"] and not s["account"]:
+    print("account\tCreate AI account      Safer: a user without sudo")
+    print("own\tUse my own account     Risky: agents can read your files")
+else:
+    if not s["self"]:
+        row("password", "Password")
+        if s.get("config") != "ready": row("config", "Yunagi config")
+    for k, l in (("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok CLI"), ("usage", "Usage")): row(k, l)
+    if not s["self"] and s.get("tmux") != "ready": row("tmux", "Shared terminal")
+if not s["self"] or s.get("own"):
+    row("grokbot", "Grok Bot"); row("hermes", "Hermes")
+')
+        choice=$(cut -f2 <<<"$rows" | gum choose --header "AI · $(status | python3 -I -c 'import json,sys; s=json.load(sys.stdin); print(s["account"] or "no account yet")')" ) || return 0
+        key=$(grep -F "$(printf '\t%s' "$choice")" <<<"$rows" | head -1 | cut -f1)
+        name=
+        if [ "$key" = account ]; then
+            name=$(gum input --header "Name of the AI account" --value ai) || continue
+        fi
+        if ( set -e; do_item "$key" $name ); then printf '\n\e[32mDone\e[0m — press Enter'
+        else printf '\n\e[31mFailed\e[0m — press Enter'; fi
+        read -r _
+    done
+}
+
 case ${1:-} in
     status) status ;;
+    menu) menu ;;
     do)
         trap 'printf "\n\e[31mFailed\e[0m — press Enter to close"; read -r _' ERR
         do_item "${@:2}"
         printf '\n\e[32mDone\e[0m — press Enter to close'; read -r _ ;;
-    *) echo "usage: yunagi-ai status | do ITEM [NAME]" >&2; exit 1 ;;
+    *) echo "usage: yunagi-ai status | do ITEM [NAME] | menu" >&2; exit 1 ;;
 esac

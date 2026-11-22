@@ -1,6 +1,6 @@
 [General]
-count=2
-rules=yunagi-opacity,yunagi-about
+count=3
+rules=yunagi-opacity,yunagi-about,yunagi-ai
 
 [yunagi-opacity]
 Description=Yunagi: kitty and Files transparent
@@ -18,4 +18,13 @@ wmclassmatch=3
 placement=5
 placementrule=2
 size=1040,640
+sizerule=2
+
+[yunagi-ai]
+Description=Yunagi: AI and AI Usage centred
+wmclass=^yunagi-ai$
+wmclassmatch=3
+placement=5
+placementrule=2
+size=900,620
 sizerule=2
