@@ -48,7 +48,8 @@ copies you own; files they replace are moved to `~/.yunagi-backup-<date>`.
 
 ### Updating
 
-`yunagi-update`, or **Update Yunagi** in the menu: pulls from GitHub, installs new
+`yunagi-update`, or **Update Yunagi** in the menu: moves to the latest release
+(tag `v*`) on GitHub, installs new
 packages and the system files, adds config files that are new and restarts the bar.
 Your own config is left alone. The first run on an install from the ISO turns
 `~/.local/share/yunagi` into a git clone and runs `install.sh` once.

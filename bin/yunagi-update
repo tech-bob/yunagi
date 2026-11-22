@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# yunagi-update — updates Yunagi from GitHub
+# yunagi-update — updates Yunagi to the latest release (tag v*) on GitHub
 #
 # ~/.local/share/yunagi becomes a git clone the first time (installs from the ISO have
 # no git): the old copy is kept beside it and install.sh runs once, backing up config
@@ -23,6 +23,9 @@ restart_bar() {
     hyprctl dispatch "hl.dsp.exec_cmd('qs -n -d')" >/dev/null
 }
 
+# The newest release tag
+latest() { git -C "$share" tag -l 'v*' --sort=-v:refname | head -1; }
+
 done_at() { mkdir -p "${state%/*}"; git -C "$share" rev-parse HEAD >"$state"; }
 
 if systemctl is-enabled -q sddm 2>/dev/null; then desktop=yunagi
@@ -41,6 +44,7 @@ if [ ! -d "$share/.git" ]; then
     mkdir -p "${share%/*}"
     mv "$tmp/yunagi" "$share"
     rmdir "$tmp"
+    git -C "$share" checkout -q "$(latest)"
     "$share/install.sh" --desktop "$desktop" --no-apps
     done_at
     restart_bar
@@ -49,7 +53,12 @@ fi
 
 cd "$share"
 say "Fetching"
-git pull --ff-only
+git fetch -q --tags --force origin
+release=$(latest)
+# A release older than what is here (e.g. a checkout of main) is not a step back
+if ! git merge-base --is-ancestor "$release" HEAD; then
+    git checkout -q "$release"
+fi
 # From the last update that finished, so an interrupted one is redone; unknown → all
 before=$(cat "$state" 2>/dev/null || git rev-parse HEAD@{1} 2>/dev/null || true)
 git cat-file -e "${before:-x}^{commit}" 2>/dev/null || before=$(git rev-list --max-parents=0 HEAD | tail -1)
