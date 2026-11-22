@@ -487,6 +487,9 @@ run_step() {
 
 : >"$log"
 SECONDS=0
+# Left over from an earlier attempt that failed: the disk is busy otherwise
+umount -R "$mnt" 2>/dev/null || true
+[ -e /dev/mapper/root ] && cryptsetup close root 2>/dev/null || true
 progress_start
 if [[ $mode != Change* ]]; then
     {
