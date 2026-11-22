@@ -42,7 +42,7 @@
   screensaver via hypridle at 5 min, lock 10 min, screens off 30 s after lock).
   AI and AI Usage (`yunagi-ai menu`, `yunagi-ai-usage show`) work but are plain;
   make them nicer, maybe a Plasma panel widget for usage like the bar's robot.
-  Panel: no Panel Colorizer; opaque (dark Plasma style), floating, 32 px via
+  Panel: no Panel Colorizer; opaque (dark Plasma style), floating, 36 px via
   `kde/panel/opaque.js` (bob 2026-11-22); ship a layout template. bob's own panel is
   in dotfiles `KDE_DESKTOP`. The earlier Panel Colorizer looks are kept in
   `kde/panel/` (`yunagi-style.json`, `kde-native.json`).
