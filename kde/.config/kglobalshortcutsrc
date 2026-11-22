@@ -21,10 +21,10 @@ _launch=Meta+U
 
 [services][org.kde.spectacle.desktop]
 _launch=Print
-RectangularRegionScreenShot=Meta+S
+RectangularRegionScreenShot=Meta+Shift+S
 
 [services][yunagi-screenshot-shared.desktop]
-_launch=Meta+Shift+S
+_launch=Meta+S
 
 [services][org.gnome.Nautilus.desktop]
 _launch=Meta+E
