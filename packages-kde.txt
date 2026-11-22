@@ -1,0 +1,19 @@
+# KDE Plasma: a lean set, tried on burken 2026-11-22 (not used by install.sh yet).
+# Files is Nautilus and the terminal kitty, from packages-common.txt.
+
+# Desktop
+plasma-desktop
+kscreen
+plasma-nm
+plasma-pa
+powerdevil
+bluedevil
+xdg-desktop-portal-kde
+
+# GTK apps in the KDE look
+kde-gtk-config
+breeze-gtk
+
+# Screenshots (Spectacle's text recognition needs one language)
+spectacle
+tesseract-data-eng
