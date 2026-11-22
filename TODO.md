@@ -46,6 +46,9 @@
   template; bob's own panel is in dotfiles `KDE_DESKTOP`. Panel Colorizer settings
   for both looks are in `kde/panel/`: `yunagi-style.json` (chosen) and
   `kde-native.json` (KDE's own background, tried on burken 2026-11-22).
+  yunagi-update picks the desktop from the login manager (SDDM → Yunagi), so a
+  KDE-only install would get Hyprland's packages: record the chosen desktops at
+  install (e.g. /etc/yunagi/desktops) and update by that; `kde/` is not updated yet.
 - **Language choice** (Swedish, English, Norwegian, Danish).
 
 # Later, maybe
