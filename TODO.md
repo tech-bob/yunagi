@@ -35,8 +35,10 @@
   install disk, without dropping to the shell.
 - **Firewall:** nftables stays the default (Settings → Config → Firewall). Try
   firewalld in a VM from the ISO; if it fits, offer it as an option.
-- **KDE** as a third desktop; **language choice** (Swedish, English, Norwegian,
-  Danish).
+- **KDE** as a third desktop (`packages-kde.txt`): KDE only, Hyprland not installed
+  unless chosen beside it, as with GNOME; KWallet off, gnome-keyring in every desktop;
+  `~/.config/plasma-workspace/env/yunagi.sh` for Plasma after Hyprland.
+- **Language choice** (Swedish, English, Norwegian, Danish).
 
 # Later, maybe
 
