@@ -1,3 +1,6 @@
+[ksmserver]
+Log Out=Meta+M\tCtrl+Alt+Del,Ctrl+Alt+Del,Show Logout Screen
+
 [kwin]
 Window Close=Meta+C\tAlt+F4,Alt+F4,Close Window
 Switch to Desktop 1=Meta+1,Ctrl+F1,Switch to Desktop 1
