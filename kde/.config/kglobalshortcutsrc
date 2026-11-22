@@ -13,6 +13,9 @@ _launch=Meta+Return
 [services][yunagi-about.desktop]
 _launch=Meta+B
 
+[services][yunagi-ai-usage.desktop]
+_launch=Meta+U
+
 [services][org.gnome.Nautilus.desktop]
 _launch=Meta+E
 
