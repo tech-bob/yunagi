@@ -18,6 +18,7 @@ matugen
 
 # Programs
 nautilus
+sushi
 gnome-text-editor
 imv
 nm-connection-editor
