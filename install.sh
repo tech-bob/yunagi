@@ -61,11 +61,19 @@ svc_enable() { if [ "$chroot" = yes ]; then systemctl enable "$@"; else sudo sys
 # Every desktop gets the firewall: nftables, incoming dropped except replies,
 # loopback and ping; outgoing open. An existing ruleset of your own is kept.
 firewall() {
-    # Replaces Arch's file or ours; a file edited by hand (pacman -Qkk flags it) stays
-    local f=/etc/nftables.conf
-    if [ ! -f $f ] || grep -q 'Yunagi firewall' $f || ! pacman -Qkk nftables 2>&1 | grep -q " $f "; then
+    # Replaced only when missing, Arch's untouched file or an untouched Yunagi version;
+    # rules you added stay
+    local f=/etc/nftables.conf c
+    if [ ! -f $f ] || ! pacman -Qkk nftables 2>&1 | grep -q " $f "; then
         as_root install -Dm644 default/nftables.conf $f
+        return
     fi
+    for c in $(git log --format=%H -- default/nftables.conf 2>/dev/null); do
+        if git show "$c:default/nftables.conf" | cmp -s - $f; then
+            as_root install -Dm644 default/nftables.conf $f
+            return
+        fi
+    done
 }
 
 if [ "$config_only" = no ]; then
