@@ -2,7 +2,7 @@
 Type=Application
 Name=Screenshot for AI
 Comment=A region saved in /home/delat/screenshots, where the AI account can read it
-Exec=sh -c 'spectacle -r -b -n -o "/home/delat/screenshots/Screenshot_$(date +%%Y%%m%%d_%%H%%M%%S).png"'
+Exec=sh -c "spectacle -r -b -n -o /home/delat/screenshots/Screenshot_\\$(date +%%Y%%m%%d_%%H%%M%%S).png"
 Icon=spectacle
 Terminal=false
 NoDisplay=true
