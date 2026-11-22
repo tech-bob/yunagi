@@ -193,7 +193,7 @@ while IFS= read -r -d '' f; do
     fi
     as_user install -D -m "$(stat -c %a "$f")" "$f" "$dst"
 done < <(if [ "$desktop" = yunagi ]; then find home -type f -print0
-         else find home/.config/kitty home/.config/fish home/.config/nvim home/Pictures -type f -print0; fi)
+         else find home/.vimrc home/.config/kitty home/.config/fish home/.config/nvim home/Pictures -type f -print0; fi)
 [ -d "$backup" ] && echo "Old files moved to $backup"
 
 if [ "$desktop" = gnome ]; then
