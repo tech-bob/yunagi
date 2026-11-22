@@ -19,6 +19,12 @@ _launch=Meta+B
 [services][yunagi-ai-usage.desktop]
 _launch=Meta+U
 
+[services][org.kde.spectacle.desktop]
+RectangularRegionScreenShot=Meta+S
+
+[services][yunagi-screenshot-shared.desktop]
+_launch=Meta+Shift+S
+
 [services][org.gnome.Nautilus.desktop]
 _launch=Meta+E
 
