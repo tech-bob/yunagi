@@ -355,7 +355,7 @@ hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("qs ipc call night toggle"), { descri
 
 -- Screenshots (shutter via yunagi-screenshot)
 hl.bind(mainMod .. " + S",         hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot region"), { description = "Screenshot of a region" })
-hl.bind("ALT + SHIFT + S",        hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot shared"), { description = "Screenshot of a region, saved in /home/delat/screenshots" })
+hl.bind("ALT + SHIFT + S",        hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot shared"), { description = "Screenshot of a region, saved in /home/delat/screenshots, not the clipboard" })
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("hyprshot -m region"), { description = "Screenshot of a region with hyprshot" })
 hl.bind(mainMod .. " + PRINT",     hl.dsp.exec_cmd("$HOME/.local/bin/yunagi-screenshot output"), { description = "Screenshot of the screen" })
 

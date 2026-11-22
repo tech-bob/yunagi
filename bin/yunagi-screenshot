@@ -7,10 +7,8 @@ case "${1:-output}" in
         sleep 0.2
         geom=$(slurp -d) || { kill $pick; exit 1; }
         if [ "$1" = shared ]; then
-            # Also saved where the AI account can read it, as Meta+S in KDE
-            file=/home/delat/screenshots/Screenshot_$(date +%Y%m%d_%H%M%S).png
-            grim -g "$geom" "$file" || { kill $pick; exit 1; }
-            wl-copy --type image/png < "$file"
+            # Only saved where the AI account can read it, not to the clipboard
+            grim -g "$geom" /home/delat/screenshots/Screenshot_$(date +%Y%m%d_%H%M%S).png || { kill $pick; exit 1; }
         else
             grim -g "$geom" - | wl-copy --type image/png
         fi
