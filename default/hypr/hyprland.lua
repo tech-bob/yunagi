@@ -280,7 +280,8 @@ hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"), { description = "Lock sc
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("qs ipc call power toggle"), { description = "Power menu" })
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager), { description = "Files" })
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("firefox"), { description = "Browser" })
-hl.bind(mainMod .. " + H", hl.dsp.exec_cmd("hermes-desktop"), { description = "Hermes" })
+-- Hermes runs once: an open window is focused
+hl.bind(mainMod .. " + H", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: com.nousresearch.hermes$' && hyprctl dispatch "hl.dsp.focus({window='class:com.nousresearch.hermes'})" || hermes-desktop]]), { description = "Hermes" })
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("qs ipc call info toggle"), { description = "System information" })
 -- Packages: open, or close it if it is already open
 hl.bind(mainMod .. " + Y", hl.dsp.exec_cmd([[hyprctl clients | grep -q 'class: yunagi-pkg$' && hyprctl dispatch "hl.dsp.window.close({window='class:yunagi-pkg'})" || kitty --class yunagi-pkg -o confirm_os_window_close=0 -o window_padding_width=0 -e yunagi-pkg]]), { description = "Packages" })
