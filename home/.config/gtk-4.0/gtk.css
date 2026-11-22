@@ -1,5 +1,5 @@
-/* libadwaita dialogs styled like the Quickshell panels; colors from matugen (colors.css) */
-@import url("colors.css");
+/* libadwaita dialogs styled like the Quickshell panels; colors from matugen (yunagi-colors.css; KDE writes colors.css) */
+@import url("yunagi-colors.css");
 
 dialog.alert sheet, dialog.alert .dialog-contents, window.messagedialog {
     background: linear-gradient(alpha(@surface, 0.96), alpha(@surface_container_high, 0.96));

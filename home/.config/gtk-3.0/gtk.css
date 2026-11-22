@@ -1,5 +1,5 @@
-/* adw-gtk3 with colors from matugen (colors.css); dialogs styled like the Quickshell panels */
-@import url("colors.css");
+/* adw-gtk3 with colors from matugen (yunagi-colors.css; KDE writes colors.css); dialogs styled like the Quickshell panels */
+@import url("yunagi-colors.css");
 
 messagedialog, messagedialog .dialog-action-box {
     background: @surface;
