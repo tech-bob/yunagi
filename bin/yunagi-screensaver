@@ -11,6 +11,18 @@ from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
 
+KWIN_JS = """
+workspace.windowAdded.connect(function (w) {
+    if (w.resourceClass != "yunagi-screensaver") return;
+    var used = workspace.windowList().filter(function (o) {
+        return o !== w && o.resourceClass == "yunagi-screensaver";
+    }).map(function (o) { return o.output.name; });
+    var free = workspace.screens.filter(function (s) { return used.indexOf(s.name) < 0; });
+    if (free.length) workspace.sendClientToScreen(w, free[0]);
+    w.fullScreen = true;
+});
+"""
+
 if "--run" not in sys.argv:
     if os.environ.get("YUNAGI_SS_LOG"):
         open(os.environ["YUNAGI_SS_LOG"], "a").write(f"{time.strftime('%T')} launcher\n")
@@ -20,10 +32,26 @@ if "--run" not in sys.argv:
         "-o", "background=#08080a", "-o", "background_opacity=1",
         "-o", "window_padding_width=0", "-o", "confirm_os_window_close=0",
         "-o", "font_size=13"]
-    # Outside Hyprland (Plasma): one fullscreen kitty on the active monitor
+    # Outside Hyprland (Plasma): a KWin script puts each kitty fullscreen on its own monitor
     if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
-        subprocess.Popen([*kitty, "--start-as=fullscreen", os.path.abspath(__file__), "--run"],
-            start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import json
+        kwin = lambda m, *a: subprocess.run(["gdbus", "call", "--session", "--dest", "org.kde.KWin",
+            "--object-path", "/Scripting", "--method", f"org.kde.kwin.Scripting.{m}", *a],
+            capture_output=True, text=True).stdout
+        if "true" not in kwin("isScriptLoaded", "yunagi-screensaver"):
+            js = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "yunagi-screensaver-kwin.js"
+            js.write_text(KWIN_JS)
+            kwin("loadScript", str(js), "yunagi-screensaver")
+            kwin("start")
+        try:
+            out = subprocess.run(["kscreen-doctor", "-j"], capture_output=True, text=True).stdout
+            n = sum(1 for o in json.loads(out)["outputs"] if o.get("enabled"))
+        except (OSError, ValueError, KeyError):
+            n = 1
+        for _ in range(max(n, 1)):
+            subprocess.Popen([*kitty, os.path.abspath(__file__), "--run"], start_new_session=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.3)
         sys.exit(0)
     # One fullscreen kitty per monitor: focus each monitor, open, wait for the window
     import json
@@ -562,7 +590,14 @@ def make_scene(style, W, H, glyph):
 
 
 def main():
+    # Wait for the window to reach its fullscreen size (KWin resizes after mapping)
     W, H = shutil.get_terminal_size()
+    end, still = time.monotonic() + 2, time.monotonic()
+    while time.monotonic() < end and time.monotonic() - still < 0.5:
+        time.sleep(0.05)
+        if shutil.get_terminal_size() != (W, H):
+            W, H = shutil.get_terminal_size()
+            still = time.monotonic()
     out = sys.stdout
     glyph = [[random.choice(GLYPHS) for _ in range(W)] for _ in range(H)]
     prev = [[None] * W for _ in range(H)]
