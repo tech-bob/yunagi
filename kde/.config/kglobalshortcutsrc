@@ -26,6 +26,9 @@ RectangularRegionScreenShot=Meta+Shift+S
 [services][yunagi-screenshot-shared.desktop]
 _launch=Meta+S
 
+[services][hermes-desktop.desktop]
+_launch=Meta+H
+
 [services][org.gnome.Nautilus.desktop]
 _launch=Meta+E
 
